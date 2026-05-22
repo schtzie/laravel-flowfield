@@ -68,6 +68,36 @@ trait HasFlowFields
     }
 
     /**
+     * Return all (or specified) FlowField values as an associative array.
+     *
+     * Useful for API serialization, audit logging, or comparing field sets
+     * without individually accessing each attribute.
+     *
+     * Cache behaviour is identical to normal attribute access:
+     * values are served from cache when warm, calculated on miss.
+     *
+     * @return array<string, mixed>
+     */
+    public function getFlowFieldValues(string ...$fields): array
+    {
+        $definitions = static::getFlowFieldDefinitions();
+
+        if (empty($fields)) {
+            $fields = array_keys($definitions);
+        }
+
+        $values = [];
+
+        foreach ($fields as $field) {
+            if (isset($definitions[$field])) {
+                $values[$field] = $this->getAttribute($field);
+            }
+        }
+
+        return $values;
+    }
+
+    /**
      * @return array<string, FlowFieldDefinition>
      */
     public static function getFlowFieldDefinitions(): array
@@ -107,6 +137,14 @@ trait HasFlowFields
             ->selectRaw($this->buildAggregateExpression($definition))
             ->whereColumn("{$related->getTable()}.{$foreignKey}", "{$parent->getTable()}.{$localKey}");
 
+        // For polymorphic relations (morphMany / morphOne), the correlated subquery
+        // must also constrain on the morph-type column. Without this, the aggregate
+        // spans ALL morph parent types — e.g. Post comments and Video comments would
+        // be mixed together when ordering posts by comment_count.
+        if ($relation instanceof \Illuminate\Database\Eloquent\Relations\MorphOneOrMany) {
+            $subQuery->where($relation->getMorphType(), $relation->getMorphClass());
+        }
+
         $definition->applyWhere($subQuery);
 
         return $query->orderBy($subQuery, $direction);
@@ -115,13 +153,21 @@ trait HasFlowFields
     protected function buildAggregateExpression(FlowFieldDefinition $definition): string
     {
         return match ($definition->method) {
-            'sum' => "COALESCE(SUM({$definition->column}), 0)",
-            'count' => "COUNT({$definition->column})",
-            'avg' => "AVG({$definition->column})",
-            'min' => "MIN({$definition->column})",
-            'max' => "MAX({$definition->column})",
+            'sum'    => "COALESCE(SUM({$definition->column}), 0)",
+            'count'  => $definition->distinct
+                            ? "COUNT(DISTINCT {$definition->column})"
+                            : "COUNT({$definition->column})",
+            'avg'    => "AVG({$definition->column})",
+            'min'    => "MIN({$definition->column})",
+            'max'    => "MAX({$definition->column})",
             'exists' => "CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END",
-            default => throw new \InvalidArgumentException("Unsupported FlowField method: {$definition->method}"),
+            // Lookup ordering via correlated subquery is not supported.
+            // Use a standard orderBy() on the resolved value instead.
+            'lookup' => throw new \InvalidArgumentException(
+                "FlowField 'lookup' does not support orderByFlowField. "
+                . "Order by the related model's column directly."
+            ),
+            default  => throw new \InvalidArgumentException("Unsupported FlowField method: {$definition->method}"),
         };
     }
 

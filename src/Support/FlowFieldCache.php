@@ -23,6 +23,11 @@ class FlowFieldCache
 
     public static function put(Model $model, string $field, mixed $value, ?int $ttl = null): void
     {
+        // ttl: 0 = no-cache mode — never store, always compute fresh
+        if ($ttl === 0) {
+            return;
+        }
+
         $key = static::buildKey($model, $field);
         $ttl = $ttl ?? config('flowfield.cache.ttl');
         $store = static::taggedStore($model);
@@ -36,6 +41,11 @@ class FlowFieldCache
 
     public static function remember(Model $model, string $field, FlowFieldDefinition $definition): mixed
     {
+        // ttl: 0 = no-cache mode — always calculate fresh, skip cache entirely
+        if ($definition->ttl === 0) {
+            return FlowFieldCalculator::calculate($model, $definition);
+        }
+
         $key = static::buildKey($model, $field);
         $value = static::taggedStore($model)->get($key, static::CACHE_MISS);
 
