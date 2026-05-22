@@ -23,13 +23,14 @@ use Openplain\FlowField\Tests\TestCase;
 class MorphFlowFieldTest extends TestCase
 {
     protected TestPost $post;
+
     protected TestVideo $video;
 
     protected function setUp(): void
     {
         parent::setUp();
 
-        $this->post  = TestPost::create(['title' => 'Test Post']);
+        $this->post = TestPost::create(['title' => 'Test Post']);
         $this->video = TestVideo::create(['title' => 'Test Video']);
     }
 
@@ -41,22 +42,22 @@ class MorphFlowFieldTest extends TestCase
     {
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
-            'body'             => 'Post comment 1',
-            'length'           => 13,
+            'commentable_id' => $this->post->id,
+            'body' => 'Post comment 1',
+            'length' => 13,
         ]));
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
-            'body'             => 'Post comment 2',
-            'length'           => 13,
+            'commentable_id' => $this->post->id,
+            'body' => 'Post comment 2',
+            'length' => 13,
         ]));
         // This comment belongs to a Video — must NOT affect the post's FlowField
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestVideo::class,
-            'commentable_id'   => $this->video->id,
-            'body'             => 'Video comment',
-            'length'           => 13,
+            'commentable_id' => $this->video->id,
+            'body' => 'Video comment',
+            'length' => 13,
         ]));
 
         $this->assertEquals(2, $this->post->comment_count);
@@ -67,17 +68,17 @@ class MorphFlowFieldTest extends TestCase
     {
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'A', 'length' => 100,
         ]));
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'B', 'length' => 200,
         ]));
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestVideo::class,
-            'commentable_id'   => $this->video->id,
+            'commentable_id' => $this->video->id,
             'body' => 'V', 'length' => 999,
         ]));
 
@@ -90,7 +91,7 @@ class MorphFlowFieldTest extends TestCase
         // Only add a Video comment — Post has_comments must remain false
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestVideo::class,
-            'commentable_id'   => $this->video->id,
+            'commentable_id' => $this->video->id,
             'body' => 'V', 'length' => 5,
         ]));
 
@@ -102,17 +103,17 @@ class MorphFlowFieldTest extends TestCase
     {
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'Short', 'length' => 10,
         ]));
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'Long', 'length' => 90,
         ]));
         TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestVideo::class,
-            'commentable_id'   => $this->video->id,
+            'commentable_id' => $this->video->id,
             'body' => 'X', 'length' => 9999,
         ]));
 
@@ -136,9 +137,9 @@ class MorphFlowFieldTest extends TestCase
         // Create a comment via normal events — triggers morphFlowFieldTargets
         TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
-            'body'             => 'Hello',
-            'length'           => 5,
+            'commentable_id' => $this->post->id,
+            'body' => 'Hello',
+            'length' => 5,
         ]);
 
         $this->assertNull(Cache::store('array')->get($cacheKey),
@@ -154,7 +155,7 @@ class MorphFlowFieldTest extends TestCase
     {
         $comment = TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'Hi', 'length' => 10,
         ]));
 
@@ -173,7 +174,7 @@ class MorphFlowFieldTest extends TestCase
     {
         $comment = TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'Delete me', 'length' => 20,
         ]));
 
@@ -192,7 +193,7 @@ class MorphFlowFieldTest extends TestCase
     {
         $comment = TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'Original', 'length' => 30,
         ]));
 
@@ -218,7 +219,7 @@ class MorphFlowFieldTest extends TestCase
 
         $comment = TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'Moveable', 'length' => 40,
         ]));
 
@@ -235,7 +236,7 @@ class MorphFlowFieldTest extends TestCase
         // Move comment to the second post
         $comment->update([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $post2->id,
+            'commentable_id' => $post2->id,
         ]);
 
         $this->assertNull(Cache::store('array')->get($key1), 'Original post cache must be cleared');
@@ -252,7 +253,7 @@ class MorphFlowFieldTest extends TestCase
     {
         $comment = TestComment::withoutEvents(fn () => TestComment::create([
             'commentable_type' => TestPost::class,
-            'commentable_id'   => $this->post->id,
+            'commentable_id' => $this->post->id,
             'body' => 'Cross-type move', 'length' => 15,
         ]));
 
@@ -260,7 +261,7 @@ class MorphFlowFieldTest extends TestCase
         $this->post->calcFlowFields('comment_count');
         $this->video->calcFlowFields('comment_count');
 
-        $postKey  = "flowfield:test_posts:{$this->post->id}:comment_count";
+        $postKey = "flowfield:test_posts:{$this->post->id}:comment_count";
         $videoKey = "flowfield:test_videos:{$this->video->id}:comment_count";
 
         $this->assertNotNull(Cache::store('array')->get($postKey));
@@ -269,13 +270,13 @@ class MorphFlowFieldTest extends TestCase
         // Move comment from Post to Video (different morph type)
         $comment->update([
             'commentable_type' => TestVideo::class,
-            'commentable_id'   => $this->video->id,
+            'commentable_id' => $this->video->id,
         ]);
 
-        $this->assertNull(Cache::store('array')->get($postKey),  'Post cache must be cleared');
+        $this->assertNull(Cache::store('array')->get($postKey), 'Post cache must be cleared');
         $this->assertNull(Cache::store('array')->get($videoKey), 'Video cache must be cleared');
 
-        $freshPost  = TestPost::find($this->post->id);
+        $freshPost = TestPost::find($this->post->id);
         $freshVideo = TestVideo::find($this->video->id);
 
         $this->assertEquals(0, $freshPost->comment_count);
@@ -334,7 +335,9 @@ class MorphFlowFieldTest extends TestCase
         $posts = TestPost::withFlowFields('comment_count', 'total_comment_length')->get();
 
         $queryCount = 0;
-        DB::listen(function () use (&$queryCount) { $queryCount++; });
+        DB::listen(function () use (&$queryCount) {
+            $queryCount++;
+        });
 
         foreach ($posts as $p) {
             $p->comment_count;

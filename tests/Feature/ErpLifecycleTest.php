@@ -9,8 +9,6 @@ use Openplain\FlowField\Tests\Fixtures\TestCustomer;
 use Openplain\FlowField\Tests\Fixtures\TestEntry;
 use Openplain\FlowField\Tests\Fixtures\TestItem;
 use Openplain\FlowField\Tests\Fixtures\TestStockMovement;
-use Openplain\FlowField\Tests\Fixtures\TestVendor;
-use Openplain\FlowField\Tests\Fixtures\TestPurchaseLine;
 use Openplain\FlowField\Tests\TestCase;
 
 /**
@@ -182,10 +180,10 @@ class ErpLifecycleTest extends TestCase
             $phpSum += $amount;
             $rows[] = [
                 'customer_id' => $customer->id,
-                'amount'      => $amount,
-                'type'        => 'invoice',
-                'created_at'  => now(),
-                'updated_at'  => now(),
+                'amount' => $amount,
+                'type' => 'invoice',
+                'created_at' => now(),
+                'updated_at' => now(),
             ];
         }
 
@@ -222,7 +220,9 @@ class ErpLifecycleTest extends TestCase
 
         // All three should now be cached — subsequent reads are zero-query
         $queryCount = 0;
-        DB::listen(function () use (&$queryCount) { $queryCount++; });
+        DB::listen(function () use (&$queryCount) {
+            $queryCount++;
+        });
 
         foreach ($customers as $c) {
             $c->balance; // should come from cache
@@ -277,7 +277,7 @@ class ErpLifecycleTest extends TestCase
         $expectedKey = "flowfield:test_customers:{$customer->id}:balance";
         $cachedValue = Cache::store('array')->get($expectedKey);
 
-        $this->assertNotNull($cachedValue, "Cache key must follow pattern: flowfield:{table}:{id}:{field}");
+        $this->assertNotNull($cachedValue, 'Cache key must follow pattern: flowfield:{table}:{id}:{field}');
         $this->assertEquals(42, (float) $cachedValue);
     }
 

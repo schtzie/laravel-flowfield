@@ -38,14 +38,14 @@ class NewFeaturesTest extends TestCase
     {
         TestEntry::withoutEvents(fn () => TestEntry::create([
             'customer_id' => $this->customer->id,
-            'amount'      => 100,
-            'type'        => 'invoice',
+            'amount' => 100,
+            'type' => 'invoice',
         ]));
         // Add a newer entry so latestOfMany picks this one
         TestEntry::withoutEvents(fn () => TestEntry::create([
             'customer_id' => $this->customer->id,
-            'amount'      => 50,
-            'type'        => 'credit',
+            'amount' => 50,
+            'type' => 'credit',
         ]));
 
         // latest_entry_type resolves via hasOne()->latestOfMany()
@@ -62,14 +62,16 @@ class NewFeaturesTest extends TestCase
     {
         TestEntry::withoutEvents(fn () => TestEntry::create([
             'customer_id' => $this->customer->id,
-            'amount'      => 200,
-            'type'        => 'invoice',
+            'amount' => 200,
+            'type' => 'invoice',
         ]));
 
         $this->customer->latest_entry_type; // prime cache
 
         $queryCount = 0;
-        DB::listen(function () use (&$queryCount) { $queryCount++; });
+        DB::listen(function () use (&$queryCount) {
+            $queryCount++;
+        });
 
         $result = $this->customer->latest_entry_type;
 
@@ -81,8 +83,8 @@ class NewFeaturesTest extends TestCase
     {
         $entry = TestEntry::withoutEvents(fn () => TestEntry::create([
             'customer_id' => $this->customer->id,
-            'amount'      => 100,
-            'type'        => 'invoice',
+            'amount' => 100,
+            'type' => 'invoice',
         ]));
 
         $this->customer->latest_entry_type; // prime cache
@@ -333,7 +335,9 @@ class NewFeaturesTest extends TestCase
         $this->customer->balance; // pre-warm cache
 
         $queryCount = 0;
-        DB::listen(function () use (&$queryCount) { $queryCount++; });
+        DB::listen(function () use (&$queryCount) {
+            $queryCount++;
+        });
 
         $values = $this->customer->getFlowFieldValues('balance');
 
@@ -414,7 +418,9 @@ class NewFeaturesTest extends TestCase
         $item->distinct_movement_type_count; // prime cache
 
         $queryCount = 0;
-        DB::listen(function () use (&$queryCount) { $queryCount++; });
+        DB::listen(function () use (&$queryCount) {
+            $queryCount++;
+        });
 
         $result = $item->distinct_movement_type_count;
 

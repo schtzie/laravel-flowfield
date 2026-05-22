@@ -38,10 +38,10 @@ class InventoryFlowFieldTest extends TestCase
     {
         // Receive 100 units via purchase
         TestStockMovement::create([
-            'item_id'       => $this->widget->id,
+            'item_id' => $this->widget->id,
             'movement_type' => 'purchase',
-            'quantity'      => 100,
-            'posted_at'     => now(),
+            'quantity' => 100,
+            'posted_at' => now(),
         ]);
 
         $this->assertEquals(100, (float) $this->widget->inventory_quantity);
@@ -157,10 +157,10 @@ class InventoryFlowFieldTest extends TestCase
     public function test_has_stock_movements_is_true_after_first_receipt(): void
     {
         TestStockMovement::create([
-            'item_id'       => $this->widget->id,
+            'item_id' => $this->widget->id,
             'movement_type' => 'purchase',
-            'quantity'      => 1,
-            'posted_at'     => now(),
+            'quantity' => 1,
+            'posted_at' => now(),
         ]);
 
         $freshItem = TestItem::find($this->widget->id);
@@ -181,7 +181,9 @@ class InventoryFlowFieldTest extends TestCase
         $this->widget->inventory_quantity;
 
         $queryCount = 0;
-        DB::listen(function () use (&$queryCount) { $queryCount++; });
+        DB::listen(function () use (&$queryCount) {
+            $queryCount++;
+        });
 
         $result = $this->widget->inventory_quantity;
 

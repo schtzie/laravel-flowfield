@@ -2,6 +2,7 @@
 
 namespace Openplain\FlowField\Support;
 
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
 use Openplain\FlowField\Concerns\HasFlowFields;
@@ -142,7 +143,7 @@ class FlowFieldCache
         return static::$tableNameCache[$modelClass] ??= (new $modelClass)->getTable();
     }
 
-    protected static function taggedStore(Model $model): \Illuminate\Contracts\Cache\Repository
+    protected static function taggedStore(Model $model): Repository
     {
         if (static::usesTags()) {
             $tag = static::buildTag(get_class($model), $model->getKey());
@@ -153,7 +154,7 @@ class FlowFieldCache
         return static::store();
     }
 
-    protected static function store(): \Illuminate\Contracts\Cache\Repository
+    protected static function store(): Repository
     {
         return Cache::store(static::storeName());
     }

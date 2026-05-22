@@ -35,6 +35,7 @@ class FlowFieldDefinitionTest extends TestCase
         $customer = TestCustomer::create(['name' => 'SQL Test']);
         $query = $customer->entries()->getQuery();
         $this->makeDefinition($where)->applyWhere($query);
+
         return $query;
     }
 
@@ -131,7 +132,7 @@ class FlowFieldDefinitionTest extends TestCase
     public function test_multiple_conditions_are_all_applied(): void
     {
         $sql = $this->queryWithWhere([
-            'type'   => 'invoice',
+            'type' => 'invoice',
             'amount' => ['>', 0],
         ])->toSql();
 
@@ -142,9 +143,9 @@ class FlowFieldDefinitionTest extends TestCase
     public function test_mix_of_operator_and_plain_conditions(): void
     {
         $sql = $this->queryWithWhere([
-            'type'      => ['invoice', 'credit'], // whereIn
+            'type' => ['invoice', 'credit'], // whereIn
             'voided_at' => null,                  // whereNull
-            'amount'    => ['>=', 10],             // operator
+            'amount' => ['>=', 10],             // operator
         ])->toSql();
 
         $this->assertStringContainsString('in (?', $sql);

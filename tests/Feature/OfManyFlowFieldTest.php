@@ -221,7 +221,9 @@ class OfManyFlowFieldTest extends TestCase
         $this->customer->largest_entry_amount; // prime cache
 
         $queryCount = 0;
-        DB::listen(function () use (&$queryCount) { $queryCount++; });
+        DB::listen(function () use (&$queryCount) {
+            $queryCount++;
+        });
 
         $result = $this->customer->largest_entry_amount;
 

@@ -3,6 +3,7 @@
 namespace Openplain\FlowField\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Database\Eloquent\Relations\MorphOneOrMany;
 use Illuminate\Support\Str;
 use Openplain\FlowField\Attributes\FlowField;
 use Openplain\FlowField\Support\FlowFieldCache;
@@ -141,7 +142,7 @@ trait HasFlowFields
         // must also constrain on the morph-type column. Without this, the aggregate
         // spans ALL morph parent types — e.g. Post comments and Video comments would
         // be mixed together when ordering posts by comment_count.
-        if ($relation instanceof \Illuminate\Database\Eloquent\Relations\MorphOneOrMany) {
+        if ($relation instanceof MorphOneOrMany) {
             $subQuery->where($relation->getMorphType(), $relation->getMorphClass());
         }
 
@@ -153,21 +154,21 @@ trait HasFlowFields
     protected function buildAggregateExpression(FlowFieldDefinition $definition): string
     {
         return match ($definition->method) {
-            'sum'    => "COALESCE(SUM({$definition->column}), 0)",
-            'count'  => $definition->distinct
+            'sum' => "COALESCE(SUM({$definition->column}), 0)",
+            'count' => $definition->distinct
                             ? "COUNT(DISTINCT {$definition->column})"
                             : "COUNT({$definition->column})",
-            'avg'    => "AVG({$definition->column})",
-            'min'    => "MIN({$definition->column})",
-            'max'    => "MAX({$definition->column})",
-            'exists' => "CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END",
+            'avg' => "AVG({$definition->column})",
+            'min' => "MIN({$definition->column})",
+            'max' => "MAX({$definition->column})",
+            'exists' => 'CASE WHEN COUNT(*) > 0 THEN 1 ELSE 0 END',
             // Lookup ordering via correlated subquery is not supported.
             // Use a standard orderBy() on the resolved value instead.
             'lookup' => throw new \InvalidArgumentException(
                 "FlowField 'lookup' does not support orderByFlowField. "
-                . "Order by the related model's column directly."
+                ."Order by the related model's column directly."
             ),
-            default  => throw new \InvalidArgumentException("Unsupported FlowField method: {$definition->method}"),
+            default => throw new \InvalidArgumentException("Unsupported FlowField method: {$definition->method}"),
         };
     }
 

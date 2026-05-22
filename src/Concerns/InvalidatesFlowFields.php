@@ -21,7 +21,6 @@ trait InvalidatesFlowFields
      * and the trait automatically resolves the '{name}_type' and '{name}_id'
      * columns to find the parent model class and ID at runtime.
      */
-
     public static function bootInvalidatesFlowFields(): void
     {
         static::created(function ($model) {
@@ -89,7 +88,7 @@ trait InvalidatesFlowFields
             [$typeColumn, $idColumn] = $this->resolveMorphColumns($target);
 
             $parentClass = $this->getAttribute($typeColumn);
-            $parentId    = $this->getAttribute($idColumn);
+            $parentId = $this->getAttribute($idColumn);
             $morphChanged = $this->wasChanged($typeColumn) || $this->wasChanged($idColumn);
 
             // Skip if morph pointer unchanged AND no relevant column changes for this parent
@@ -104,7 +103,7 @@ trait InvalidatesFlowFields
             // If the morph target was reassigned, also invalidate the OLD parent
             if ($morphChanged) {
                 $oldParentClass = $this->getOriginal($typeColumn);
-                $oldParentId    = $this->getOriginal($idColumn);
+                $oldParentId = $this->getOriginal($idColumn);
 
                 if ($oldParentClass && $oldParentId !== null
                     && ($oldParentClass !== $parentClass || $oldParentId !== $parentId)
@@ -173,7 +172,7 @@ trait InvalidatesFlowFields
             [$typeColumn, $idColumn] = $this->resolveMorphColumns($target);
 
             $parentClass = $this->getAttribute($typeColumn);
-            $parentId    = $this->getAttribute($idColumn);
+            $parentId = $this->getAttribute($idColumn);
 
             if ($parentClass !== null && $parentId !== null) {
                 $pairs[] = [$parentClass, $parentId];

@@ -20,19 +20,19 @@ class FlowFieldCalculator
         $definition->applyWhere($query);
 
         return match ($definition->method) {
-            'sum'    => $query->sum($definition->column),
-            'count'  => $definition->distinct
+            'sum' => $query->sum($definition->column),
+            'count' => $definition->distinct
                             ? $query->distinct()->count($definition->column)
                             : $query->count($definition->column),
-            'avg'    => $query->avg($definition->column),
-            'min'    => $query->min($definition->column),
-            'max'    => $query->max($definition->column),
+            'avg' => $query->avg($definition->column),
+            'min' => $query->min($definition->column),
+            'max' => $query->max($definition->column),
             'exists' => $query->exists(),
             // Lookup: the 7th Navision FlowField type — fetches a single column
             // value from the first matching related record. Returns null when
             // no related record exists.
             'lookup' => $query->value($definition->column),
-            default  => throw new InvalidArgumentException("Unsupported FlowField method: {$definition->method}"),
+            default => throw new InvalidArgumentException("Unsupported FlowField method: {$definition->method}"),
         };
     }
 
@@ -50,7 +50,7 @@ class FlowFieldCalculator
         if ($definition->method !== 'lookup') {
             throw new InvalidArgumentException(
                 "FlowField 'ofMany' is only valid with method: 'lookup'. "
-                . "Got: '{$definition->method}'."
+                ."Got: '{$definition->method}'."
             );
         }
 
@@ -62,13 +62,13 @@ class FlowFieldCalculator
         if ($hasManyRelation instanceof MorphOneOrMany) {
             throw new InvalidArgumentException(
                 "FlowField 'ofMany' does not support polymorphic (morphMany) relations. "
-                . "Define a dedicated hasOne()->ofMany() method on your model instead."
+                .'Define a dedicated hasOne()->ofMany() method on your model instead.'
             );
         }
 
         $relatedClass = get_class($hasManyRelation->getRelated());
-        $foreignKey   = $hasManyRelation->getForeignKeyName();
-        $localKey     = $hasManyRelation->getLocalKeyName();
+        $foreignKey = $hasManyRelation->getForeignKeyName();
+        $localKey = $hasManyRelation->getLocalKeyName();
 
         // Build a hasOne with the same FK/local-key so we can chain ofMany variants.
         $hasOne = $parent->hasOne($relatedClass, $foreignKey, $localKey);
@@ -76,14 +76,14 @@ class FlowFieldCalculator
         $ofMany = $definition->ofMany;
 
         $query = match (true) {
-            $ofMany === 'latest'   => $hasOne->latestOfMany(),
-            $ofMany === 'oldest'   => $hasOne->oldestOfMany(),
-            $ofMany === 'max'      => $hasOne->ofMany($definition->column, 'max'),
-            $ofMany === 'min'      => $hasOne->ofMany($definition->column, 'min'),
-            is_array($ofMany)      => $hasOne->ofMany($ofMany[0], $ofMany[1]),
-            default                => throw new InvalidArgumentException(
+            $ofMany === 'latest' => $hasOne->latestOfMany(),
+            $ofMany === 'oldest' => $hasOne->oldestOfMany(),
+            $ofMany === 'max' => $hasOne->ofMany($definition->column, 'max'),
+            $ofMany === 'min' => $hasOne->ofMany($definition->column, 'min'),
+            is_array($ofMany) => $hasOne->ofMany($ofMany[0], $ofMany[1]),
+            default => throw new InvalidArgumentException(
                 "Unknown ofMany value: '{$ofMany}'. "
-                . "Expected: 'latest', 'oldest', 'max', 'min', or ['column', 'aggregate']."
+                ."Expected: 'latest', 'oldest', 'max', 'min', or ['column', 'aggregate']."
             ),
         };
 
