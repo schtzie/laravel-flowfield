@@ -1,12 +1,12 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Unit;
+namespace Schtzie\FlowField\Tests\Unit;
 
-use Openplain\FlowField\Support\FlowFieldCalculator;
-use Openplain\FlowField\Support\FlowFieldDefinition;
-use Openplain\FlowField\Tests\Fixtures\TestCustomer;
-use Openplain\FlowField\Tests\Fixtures\TestEntry;
-use Openplain\FlowField\Tests\TestCase;
+use Schtzie\FlowField\Support\FlowFieldCalculator;
+use Schtzie\FlowField\Support\FlowFieldDefinition;
+use Schtzie\FlowField\Tests\Fixtures\TestCustomer;
+use Schtzie\FlowField\Tests\Fixtures\TestEntry;
+use Schtzie\FlowField\Tests\TestCase;
 
 class FlowFieldCalculatorTest extends TestCase
 {

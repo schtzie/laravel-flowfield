@@ -1,12 +1,12 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Unit;
+namespace Schtzie\FlowField\Tests\Unit;
 
-use Openplain\FlowField\Attributes\FlowField;
-use Openplain\FlowField\Tests\Fixtures\TestCustomer;
-use Openplain\FlowField\Tests\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
+use Schtzie\FlowField\Attributes\FlowField;
+use Schtzie\FlowField\Tests\Fixtures\TestCustomer;
+use Schtzie\FlowField\Tests\TestCase;
 
 class FlowFieldAttributeTest extends TestCase
 {

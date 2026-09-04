@@ -15,7 +15,7 @@ Thank you for considering contributing to Laravel FlowField! We welcome contribu
 1. Fork the repository
 2. Clone your fork:
    ```bash
-   git clone https://github.com/openplain/laravel-flowfield.git
+   git clone https://github.com/schtzie/laravel-flowfield.git
    cd laravel-flowfield
    ```
 
@@ -67,7 +67,7 @@ To test changes in a real Laravel application, add a path repository to your tes
 Then require the package:
 
 ```bash
-composer require openplain/laravel-flowfield:@dev
+composer require schtzie/laravel-flowfield:@dev
 ```
 
 ## Pull Request Guidelines

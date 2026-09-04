@@ -1,10 +1,11 @@
 <?php
 
-namespace Openplain\FlowField\Support;
+namespace Schtzie\FlowField\Support;
 
+use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
-use Openplain\FlowField\Concerns\HasFlowFields;
+use Schtzie\FlowField\Concerns\HasFlowFields;
 
 class FlowFieldCache
 {
@@ -23,6 +24,11 @@ class FlowFieldCache
 
     public static function put(Model $model, string $field, mixed $value, ?int $ttl = null): void
     {
+        // ttl: 0 = no-cache mode — never store, always compute fresh
+        if ($ttl === 0) {
+            return;
+        }
+
         $key = static::buildKey($model, $field);
         $ttl = $ttl ?? config('flowfield.cache.ttl');
         $store = static::taggedStore($model);
@@ -36,6 +42,11 @@ class FlowFieldCache
 
     public static function remember(Model $model, string $field, FlowFieldDefinition $definition): mixed
     {
+        // ttl: 0 = no-cache mode — always calculate fresh, skip cache entirely
+        if ($definition->ttl === 0) {
+            return FlowFieldCalculator::calculate($model, $definition);
+        }
+
         $key = static::buildKey($model, $field);
         $value = static::taggedStore($model)->get($key, static::CACHE_MISS);
 
@@ -132,7 +143,7 @@ class FlowFieldCache
         return static::$tableNameCache[$modelClass] ??= (new $modelClass)->getTable();
     }
 
-    protected static function taggedStore(Model $model): \Illuminate\Contracts\Cache\Repository
+    protected static function taggedStore(Model $model): Repository
     {
         if (static::usesTags()) {
             $tag = static::buildTag(get_class($model), $model->getKey());
@@ -143,7 +154,7 @@ class FlowFieldCache
         return static::store();
     }
 
-    protected static function store(): \Illuminate\Contracts\Cache\Repository
+    protected static function store(): Repository
     {
         return Cache::store(static::storeName());
     }
