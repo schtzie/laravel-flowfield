@@ -1,10 +1,10 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Unit;
+namespace Schtzie\FlowField\Tests\Unit;
 
-use Openplain\FlowField\Support\FlowFieldCache;
-use Openplain\FlowField\Tests\Fixtures\TestCustomer;
-use Openplain\FlowField\Tests\TestCase;
+use Schtzie\FlowField\Support\FlowFieldCache;
+use Schtzie\FlowField\Tests\Fixtures\TestCustomer;
+use Schtzie\FlowField\Tests\TestCase;
 
 class FlowFieldCacheTest extends TestCase
 {

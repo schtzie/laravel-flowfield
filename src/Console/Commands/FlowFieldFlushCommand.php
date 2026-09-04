@@ -1,8 +1,8 @@
 <?php
 
-namespace Openplain\FlowField\Console\Commands;
+namespace Schtzie\FlowField\Console\Commands;
 
-use Openplain\FlowField\Support\FlowFieldCache;
+use Schtzie\FlowField\Support\FlowFieldCache;
 
 class FlowFieldFlushCommand extends BaseFlowFieldCommand
 {

@@ -1,10 +1,10 @@
 <?php
 
-namespace Openplain\FlowField;
+namespace Schtzie\FlowField;
 
 use Illuminate\Support\ServiceProvider;
-use Openplain\FlowField\Console\Commands\FlowFieldFlushCommand;
-use Openplain\FlowField\Console\Commands\FlowFieldWarmCommand;
+use Schtzie\FlowField\Console\Commands\FlowFieldFlushCommand;
+use Schtzie\FlowField\Console\Commands\FlowFieldWarmCommand;
 
 class FlowFieldServiceProvider extends ServiceProvider
 {

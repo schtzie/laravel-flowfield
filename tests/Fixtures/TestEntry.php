@@ -1,10 +1,10 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Fixtures;
+namespace Schtzie\FlowField\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Openplain\FlowField\Concerns\InvalidatesFlowFields;
+use Schtzie\FlowField\Concerns\InvalidatesFlowFields;
 
 class TestEntry extends Model
 {

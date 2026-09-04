@@ -1,11 +1,26 @@
 <?php
 
-namespace Openplain\FlowField\Concerns;
+namespace Schtzie\FlowField\Concerns;
 
-use Openplain\FlowField\Support\FlowFieldCache;
+use Schtzie\FlowField\Support\FlowFieldCache;
 
 trait InvalidatesFlowFields
 {
+    /**
+     * Polymorphic morph-relation base names whose parent models should have
+     * their FlowFields invalidated when this model changes.
+     *
+     * Define this property on your model class (not here in the trait):
+     *
+     *   protected array $morphFlowFieldTargets = [
+     *       'commentable',                              // standard naming convention
+     *       ['type' => 'ref_type', 'id' => 'ref_id'],  // custom column names
+     *   ];
+     *
+     * Each entry is the base name of the morph relation (e.g. 'commentable'),
+     * and the trait automatically resolves the '{name}_type' and '{name}_id'
+     * columns to find the parent model class and ID at runtime.
+     */
     public static function bootInvalidatesFlowFields(): void
     {
         static::created(function ($model) {
@@ -29,6 +44,7 @@ trait InvalidatesFlowFields
 
     protected function invalidateFlowFieldTargets(): void
     {
+        // Regular (non-polymorphic) targets
         foreach ($this->flowFieldTargets as $targetClass => $foreignKey) {
             $parentId = $this->getAttribute($foreignKey);
 
@@ -36,10 +52,16 @@ trait InvalidatesFlowFields
                 $this->invalidateAndMaybeWarm($targetClass, $parentId);
             }
         }
+
+        // Polymorphic targets
+        foreach ($this->resolveMorphTargets() as [$parentClass, $parentId]) {
+            $this->invalidateAndMaybeWarm($parentClass, $parentId);
+        }
     }
 
     protected function invalidateFlowFieldTargetsOnUpdate(): void
     {
+        // Regular (non-polymorphic) targets
         foreach ($this->flowFieldTargets as $targetClass => $foreignKey) {
             $parentId = $this->getAttribute($foreignKey);
             $foreignKeyChanged = $this->wasChanged($foreignKey);
@@ -57,6 +79,36 @@ trait InvalidatesFlowFields
 
                 if ($oldParentId !== null && $oldParentId !== $parentId) {
                     $this->invalidateAndMaybeWarm($targetClass, $oldParentId);
+                }
+            }
+        }
+
+        // Polymorphic targets
+        foreach ($this->morphFlowFieldTargets ?? [] as $target) {
+            [$typeColumn, $idColumn] = $this->resolveMorphColumns($target);
+
+            $parentClass = $this->getAttribute($typeColumn);
+            $parentId = $this->getAttribute($idColumn);
+            $morphChanged = $this->wasChanged($typeColumn) || $this->wasChanged($idColumn);
+
+            // Skip if morph pointer unchanged AND no relevant column changes for this parent
+            if (! $morphChanged && $parentClass && ! $this->hasRelevantChanges($parentClass)) {
+                continue;
+            }
+
+            if ($parentClass && $parentId !== null) {
+                $this->invalidateAndMaybeWarm($parentClass, $parentId);
+            }
+
+            // If the morph target was reassigned, also invalidate the OLD parent
+            if ($morphChanged) {
+                $oldParentClass = $this->getOriginal($typeColumn);
+                $oldParentId = $this->getOriginal($idColumn);
+
+                if ($oldParentClass && $oldParentId !== null
+                    && ($oldParentClass !== $parentClass || $oldParentId !== $parentId)
+                ) {
+                    $this->invalidateAndMaybeWarm($oldParentClass, $oldParentId);
                 }
             }
         }
@@ -105,5 +157,46 @@ trait InvalidatesFlowFields
         }
 
         return false;
+    }
+
+    /**
+     * Resolve all current (parentClass, parentId) pairs from $morphFlowFieldTargets.
+     *
+     * @return array<int, array{0: string, 1: int|string}>
+     */
+    private function resolveMorphTargets(): array
+    {
+        $pairs = [];
+
+        foreach ($this->morphFlowFieldTargets ?? [] as $target) {
+            [$typeColumn, $idColumn] = $this->resolveMorphColumns($target);
+
+            $parentClass = $this->getAttribute($typeColumn);
+            $parentId = $this->getAttribute($idColumn);
+
+            if ($parentClass !== null && $parentId !== null) {
+                $pairs[] = [$parentClass, $parentId];
+            }
+        }
+
+        return $pairs;
+    }
+
+    /**
+     * Resolve morph column names from a target declaration.
+     *
+     * Supports:
+     *   'commentable'                            → ['commentable_type', 'commentable_id']
+     *   ['type' => 'ref_type', 'id' => 'ref_id'] → ['ref_type', 'ref_id']
+     *
+     * @return array{0: string, 1: string}
+     */
+    private function resolveMorphColumns(string|array $target): array
+    {
+        if (is_string($target)) {
+            return ["{$target}_type", "{$target}_id"];
+        }
+
+        return [$target['type'], $target['id']];
     }
 }

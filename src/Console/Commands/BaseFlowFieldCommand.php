@@ -1,10 +1,10 @@
 <?php
 
-namespace Openplain\FlowField\Console\Commands;
+namespace Schtzie\FlowField\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\File;
-use Openplain\FlowField\Concerns\HasFlowFields;
+use Schtzie\FlowField\Concerns\HasFlowFields;
 
 abstract class BaseFlowFieldCommand extends Command
 {
