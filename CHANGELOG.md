@@ -2,7 +2,7 @@
 
 All notable changes to `laravel-flowfield` will be documented in this file.
 
-## Unreleased
+## 1.0.0 - 2026-09-04
 
 ### Added
 
