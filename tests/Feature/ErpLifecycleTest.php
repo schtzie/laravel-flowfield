@@ -1,15 +1,15 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Feature;
+namespace Schtzie\FlowField\Tests\Feature;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Openplain\FlowField\Support\FlowFieldCache;
-use Openplain\FlowField\Tests\Fixtures\TestCustomer;
-use Openplain\FlowField\Tests\Fixtures\TestEntry;
-use Openplain\FlowField\Tests\Fixtures\TestItem;
-use Openplain\FlowField\Tests\Fixtures\TestStockMovement;
-use Openplain\FlowField\Tests\TestCase;
+use Schtzie\FlowField\Support\FlowFieldCache;
+use Schtzie\FlowField\Tests\Fixtures\TestCustomer;
+use Schtzie\FlowField\Tests\Fixtures\TestEntry;
+use Schtzie\FlowField\Tests\Fixtures\TestItem;
+use Schtzie\FlowField\Tests\Fixtures\TestStockMovement;
+use Schtzie\FlowField\Tests\TestCase;
 
 /**
  * ERP Lifecycle Tests — end-to-end Navision FlowField concept scenarios

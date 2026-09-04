@@ -1,11 +1,11 @@
 <?php
 
-namespace Openplain\FlowField\Support;
+namespace Schtzie\FlowField\Support;
 
 use Illuminate\Contracts\Cache\Repository;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
-use Openplain\FlowField\Concerns\HasFlowFields;
+use Schtzie\FlowField\Concerns\HasFlowFields;
 
 class FlowFieldCache
 {

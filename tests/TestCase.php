@@ -1,11 +1,11 @@
 <?php
 
-namespace Openplain\FlowField\Tests;
+namespace Schtzie\FlowField\Tests;
 
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Schema;
-use Openplain\FlowField\FlowFieldServiceProvider;
 use Orchestra\Testbench\TestCase as Orchestra;
+use Schtzie\FlowField\FlowFieldServiceProvider;
 
 abstract class TestCase extends Orchestra
 {

@@ -1,11 +1,11 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Unit;
+namespace Schtzie\FlowField\Tests\Unit;
 
 use Illuminate\Database\Eloquent\Builder;
-use Openplain\FlowField\Support\FlowFieldDefinition;
-use Openplain\FlowField\Tests\Fixtures\TestCustomer;
-use Openplain\FlowField\Tests\TestCase;
+use Schtzie\FlowField\Support\FlowFieldDefinition;
+use Schtzie\FlowField\Tests\Fixtures\TestCustomer;
+use Schtzie\FlowField\Tests\TestCase;
 
 /**
  * Unit tests for FlowFieldDefinition::applyWhere()

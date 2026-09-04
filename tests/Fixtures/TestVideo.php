@@ -1,11 +1,11 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Fixtures;
+namespace Schtzie\FlowField\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
-use Openplain\FlowField\Attributes\FlowField;
-use Openplain\FlowField\Concerns\HasFlowFields;
+use Schtzie\FlowField\Attributes\FlowField;
+use Schtzie\FlowField\Concerns\HasFlowFields;
 
 /**
  * TestVideo — second morph parent used to verify type-isolation.

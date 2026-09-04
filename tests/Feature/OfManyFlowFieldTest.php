@@ -1,13 +1,13 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Feature;
+namespace Schtzie\FlowField\Tests\Feature;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
-use Openplain\FlowField\Tests\Fixtures\TestCustomer;
-use Openplain\FlowField\Tests\Fixtures\TestEntry;
-use Openplain\FlowField\Tests\TestCase;
+use Schtzie\FlowField\Tests\Fixtures\TestCustomer;
+use Schtzie\FlowField\Tests\Fixtures\TestEntry;
+use Schtzie\FlowField\Tests\TestCase;
 
 /**
  * ofMany FlowField Tests — inline "one of many" selection

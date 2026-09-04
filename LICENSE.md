@@ -1,6 +1,9 @@
 The MIT License (MIT)
 
-Copyright (c) Openplain
+Copyright (c) 2026 Openplain
+
+Modifications:
+Copyright (c) 2026 schtzie
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

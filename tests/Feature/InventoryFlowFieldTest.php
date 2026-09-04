@@ -1,12 +1,12 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Feature;
+namespace Schtzie\FlowField\Tests\Feature;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Openplain\FlowField\Tests\Fixtures\TestItem;
-use Openplain\FlowField\Tests\Fixtures\TestStockMovement;
-use Openplain\FlowField\Tests\TestCase;
+use Schtzie\FlowField\Tests\Fixtures\TestItem;
+use Schtzie\FlowField\Tests\Fixtures\TestStockMovement;
+use Schtzie\FlowField\Tests\TestCase;
 
 /**
  * Inventory FlowField Tests — Navision Item Ledger Entry analog

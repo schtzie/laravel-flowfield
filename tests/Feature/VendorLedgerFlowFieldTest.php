@@ -1,11 +1,11 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Feature;
+namespace Schtzie\FlowField\Tests\Feature;
 
 use Illuminate\Support\Facades\Cache;
-use Openplain\FlowField\Tests\Fixtures\TestPurchaseLine;
-use Openplain\FlowField\Tests\Fixtures\TestVendor;
-use Openplain\FlowField\Tests\TestCase;
+use Schtzie\FlowField\Tests\Fixtures\TestPurchaseLine;
+use Schtzie\FlowField\Tests\Fixtures\TestVendor;
+use Schtzie\FlowField\Tests\TestCase;
 
 /**
  * Vendor Ledger FlowField Tests — Navision Vendor Ledger Entry analog

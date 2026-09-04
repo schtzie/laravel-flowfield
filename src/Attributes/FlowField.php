@@ -1,6 +1,6 @@
 <?php
 
-namespace Openplain\FlowField\Attributes;
+namespace Schtzie\FlowField\Attributes;
 
 use Attribute;
 

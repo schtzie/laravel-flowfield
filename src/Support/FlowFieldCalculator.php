@@ -1,6 +1,6 @@
 <?php
 
-namespace Openplain\FlowField\Support;
+namespace Schtzie\FlowField\Support;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\MorphOneOrMany;

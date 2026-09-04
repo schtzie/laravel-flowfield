@@ -1,10 +1,10 @@
 <?php
 
-namespace Openplain\FlowField\Support;
+namespace Schtzie\FlowField\Support;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
-use Openplain\FlowField\Attributes\FlowField;
+use Schtzie\FlowField\Attributes\FlowField;
 
 class FlowFieldDefinition
 {

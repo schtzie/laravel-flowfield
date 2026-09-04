@@ -1,8 +1,8 @@
 {
-    "name": "openplain/laravel-flowfield",
+    "name": "schtzie/laravel-flowfield",
     "description": "Cache-backed computed aggregate fields for Eloquent — inspired by Navision's FlowField concept.",
     "keywords": ["laravel", "eloquent", "flowfield", "cache", "aggregate", "computed", "navision", "sift"],
-    "homepage": "https://github.com/openplain/laravel-flowfield",
+    "homepage": "https://github.com/schtzie/laravel-flowfield",
     "license": "MIT",
     "authors": [
         {
@@ -24,12 +24,12 @@
     },
     "autoload": {
         "psr-4": {
-            "Openplain\\FlowField\\": "src/"
+            "Schtzie\\FlowField\\": "src/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "Openplain\\FlowField\\Tests\\": "tests/"
+            "Schtzie\\FlowField\\Tests\\": "tests/"
         }
     },
     "scripts": {
@@ -40,7 +40,7 @@
     "extra": {
         "laravel": {
             "providers": [
-                "Openplain\\FlowField\\FlowFieldServiceProvider"
+                "Schtzie\\FlowField\\FlowFieldServiceProvider"
             ]
         }
     },

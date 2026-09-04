@@ -1,7 +1,18 @@
 # Laravel FlowField
 
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/openplain/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/openplain/laravel-flowfield)
-[![Total Downloads](https://img.shields.io/packagist/dt/openplain/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/openplain/laravel-flowfield)
+## Based on
+This project is a fork of
+[openplain/laravel-flowfield](https://github.com/openplain/laravel-flowfield).
+The original project is created and maintained by [Openplain](https://openplain.dev)
+and is licensed under the MIT License.
+This fork contains modifications and enhancements maintained by
+[schtzie](https://github.com/schtzie).
+
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
+[![Total Downloads](https://img.shields.io/packagist/dt/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
+[![PHP Version](https://img.shields.io/packagist/php-v/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
+[![License](https://img.shields.io/packagist/l/schtzie/laravel-flowfield.svg?style=flat-square)](LICENSE.md)
+[![Tests](https://img.shields.io/github/actions/workflow/status/schtzie/laravel-flowfield/tests.yml?style=flat-square&label=tests)](https://github.com/schtzie/laravel-flowfield/actions/workflows/tests.yml)
 
 Cache-backed computed aggregate fields for Eloquent — inspired by Navision's FlowField concept.
 
@@ -45,7 +56,7 @@ We brought the FlowField concept to Laravel. Where Navision uses SIFT indexes fo
 ## Installation
 
 ```bash
-composer require openplain/laravel-flowfield
+composer require schtzie/laravel-flowfield
 ```
 
 Optionally publish the configuration file:
@@ -911,6 +922,19 @@ protected function balance(): Attribute { ... }
 
 ---
 
+## Based on
+
+This project is a fork of
+[openplain/laravel-flowfield](https://github.com/openplain/laravel-flowfield).
+
+The original project is created and maintained by [Openplain](https://openplain.dev)
+and is licensed under the MIT License.
+
+This fork contains modifications and enhancements maintained by
+[schtzie](https://github.com/schtzie).
+
+---
+
 ## Inspiration
 
 This package implements the **FlowField** concept from Microsoft Dynamics NAV/Business Central — virtual fields that display computed aggregates (Sum, Count, Average, Min, Max, Exist, Lookup) without storing the result in the table.
@@ -946,10 +970,18 @@ If you discover a security vulnerability, please email security@openplain.dev. A
 
 **Please do not** open public issues for security vulnerabilities.
 
+## Contributors
+
+[![Contributors](https://contrib.rocks/image?repo=schtzie/laravel-flowfield)](https://github.com/schtzie/laravel-flowfield/graphs/contributors)
+
+*Contributions of any size are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md) for details.*
+
+---
+
 ## License
 
 The MIT License (MIT). Please see [License File](LICENSE.md) for more information.
 
 ---
 
-Built with ❤️ by [Openplain](https://openplain.dev)
+Built with ❤️ by [schtzie](https://github.com/schtzie)

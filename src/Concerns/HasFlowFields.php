@@ -1,16 +1,16 @@
 <?php
 
-namespace Openplain\FlowField\Concerns;
+namespace Schtzie\FlowField\Concerns;
 
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\MorphOneOrMany;
 use Illuminate\Support\Str;
-use Openplain\FlowField\Attributes\FlowField;
-use Openplain\FlowField\Support\FlowFieldCache;
-use Openplain\FlowField\Support\FlowFieldCalculator;
-use Openplain\FlowField\Support\FlowFieldDefinition;
 use ReflectionClass;
 use ReflectionMethod;
+use Schtzie\FlowField\Attributes\FlowField;
+use Schtzie\FlowField\Support\FlowFieldCache;
+use Schtzie\FlowField\Support\FlowFieldCalculator;
+use Schtzie\FlowField\Support\FlowFieldDefinition;
 
 trait HasFlowFields
 {

@@ -1,13 +1,13 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Feature;
+namespace Schtzie\FlowField\Tests\Feature;
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
-use Openplain\FlowField\Tests\Fixtures\TestComment;
-use Openplain\FlowField\Tests\Fixtures\TestPost;
-use Openplain\FlowField\Tests\Fixtures\TestVideo;
-use Openplain\FlowField\Tests\TestCase;
+use Schtzie\FlowField\Tests\Fixtures\TestComment;
+use Schtzie\FlowField\Tests\Fixtures\TestPost;
+use Schtzie\FlowField\Tests\Fixtures\TestVideo;
+use Schtzie\FlowField\Tests\TestCase;
 
 /**
  * MorphFlowField Tests — polymorphic (morphMany / morphOne) relationships

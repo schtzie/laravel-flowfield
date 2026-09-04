@@ -1,8 +1,8 @@
 <?php
 
-namespace Openplain\FlowField\Concerns;
+namespace Schtzie\FlowField\Concerns;
 
-use Openplain\FlowField\Support\FlowFieldCache;
+use Schtzie\FlowField\Support\FlowFieldCache;
 
 trait InvalidatesFlowFields
 {

@@ -1,9 +1,9 @@
 <?php
 
-namespace Openplain\FlowField\Tests\Fixtures;
+namespace Schtzie\FlowField\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Model;
-use Openplain\FlowField\Concerns\InvalidatesFlowFields;
+use Schtzie\FlowField\Concerns\InvalidatesFlowFields;
 
 /**
  * Mirrors Navision's Purchase Line / Vendor Ledger Entry table.
