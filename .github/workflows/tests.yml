@@ -35,9 +35,6 @@ jobs:
           - php: "8.4"
             laravel: "11.*"
             testbench: "^9.0"
-          - php: "8.5"
-            laravel: "11.*"
-            testbench: "^9.0"
           # Laravel 12 — testbench 10.x (PHP 8.2–8.5)
           - php: "8.2"
             laravel: "12.*"
