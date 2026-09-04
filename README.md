@@ -1,5 +1,14 @@
 # Laravel FlowField
 
+[![Latest Version on Packagist](https://img.shields.io/packagist/v/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
+[![Total Downloads](https://img.shields.io/packagist/dt/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
+[![PHP Version](https://img.shields.io/packagist/php-v/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
+[![License](https://img.shields.io/packagist/l/schtzie/laravel-flowfield.svg?style=flat-square)](LICENSE.md)
+[![Tests](https://img.shields.io/github/actions/workflow/status/schtzie/laravel-flowfield/tests.yml?style=flat-square&label=tests)](https://github.com/schtzie/laravel-flowfield/actions/workflows/tests.yml)
+
+
+Cache-backed computed aggregate fields for Eloquent — inspired by Navision's FlowField concept.
+
 ## Based on
 This project is a fork of
 [openplain/laravel-flowfield](https://github.com/openplain/laravel-flowfield).
@@ -7,14 +16,6 @@ The original project is created and maintained by [Openplain](https://openplain.
 and is licensed under the MIT License.
 This fork contains modifications and enhancements maintained by
 [schtzie](https://github.com/schtzie).
-
-[![Latest Version on Packagist](https://img.shields.io/packagist/v/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
-[![Total Downloads](https://img.shields.io/packagist/dt/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
-[![PHP Version](https://img.shields.io/packagist/php-v/schtzie/laravel-flowfield.svg?style=flat-square)](https://packagist.org/packages/schtzie/laravel-flowfield)
-[![License](https://img.shields.io/packagist/l/schtzie/laravel-flowfield.svg?style=flat-square)](LICENSE.md)
-[![Tests](https://img.shields.io/github/actions/workflow/status/schtzie/laravel-flowfield/tests.yml?style=flat-square&label=tests)](https://github.com/schtzie/laravel-flowfield/actions/workflows/tests.yml)
-
-Cache-backed computed aggregate fields for Eloquent — inspired by Navision's FlowField concept.
 
 ## Why This Package?
 
