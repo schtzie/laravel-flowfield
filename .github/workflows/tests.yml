@@ -86,7 +86,7 @@ jobs:
                            "illuminate/cache:${{ matrix.laravel }}" \
                            "orchestra/testbench:${{ matrix.testbench }}" \
                            --no-interaction --no-update
-          composer update --prefer-dist --no-interaction --prefer-stable
+          composer update --prefer-dist --no-interaction --prefer-stable --with-all-dependencies --ignore-platform-reqs
 
       - name: Run tests
         run: composer test
