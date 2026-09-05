@@ -110,10 +110,19 @@ trait HasFlowFields
 
     public function scopeWithFlowFields(Builder $query, string ...$fields): Builder
     {
-        $query->afterQuery(function ($models) use ($fields) {
-            foreach ($models as $model) {
-                $model->calcFlowFields(...$fields);
-            }
+        if (method_exists($query, 'afterQuery')) {
+            $query->afterQuery(function ($models) use ($fields) {
+                foreach ($models as $model) {
+                    $model->calcFlowFields(...$fields);
+                }
+            });
+
+            return $query;
+        }
+
+        $modelClass = get_class($query->getModel());
+        $modelClass::retrieved(function ($model) use ($fields) {
+            $model->calcFlowFields(...$fields);
         });
 
         return $query;
