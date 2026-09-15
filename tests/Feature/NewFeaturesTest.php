@@ -333,3 +333,25 @@ it('no-cache ttl is reflected in definition', function () {
     $defs = $this->customer->getFlowFieldDefinitions();
     expect($defs['live_balance']->ttl)->toBe(0);
 });
+
+// --- Feature 7: OR Where Conditions ---
+
+it('_or condition groups multiple where clauses with orWhere', function () {
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $this->customer->id, 'amount' => 100, 'type' => 'invoice',
+    ]));
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $this->customer->id, 'amount' => 50, 'type' => 'finance_charge',
+    ]));
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $this->customer->id, 'amount' => -20, 'type' => 'credit',
+    ]));
+    // This invoice should be ignored because amount is <= 0 (our definition says amount > 0)
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $this->customer->id, 'amount' => -10, 'type' => 'invoice',
+    ]));
+
+    // total_receivables = sum of (invoice and amount > 0) OR (finance_charge)
+    // = 100 + 50 = 150
+    expect((float) $this->customer->total_receivables)->toBe(150.0);
+});

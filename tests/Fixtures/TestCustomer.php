@@ -76,6 +76,21 @@ class TestCustomer extends Model
         return Attribute::make(get: fn () => null);
     }
 
+    // 3. OR Where Conditions
+    #[FlowField(
+        method: 'sum',
+        relation: 'entries',
+        column: 'amount',
+        where: ['_or' => [
+            ['type' => 'invoice', 'amount' => ['>', 0]],
+            ['type' => 'finance_charge'],
+        ]]
+    )]
+    protected function totalReceivables(): Attribute
+    {
+        return Attribute::make(get: fn () => null);
+    }
+
     // -------------------------------------------------------------------------
     // Original FlowFields (unchanged)
     // -------------------------------------------------------------------------

@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace Schtzie\FlowField\Concerns;
 
-use Schtzie\FlowField\Support\FlowFieldCache;
-
 trait InvalidatesFlowFields
 {
     /**
@@ -118,15 +116,13 @@ trait InvalidatesFlowFields
 
     protected function invalidateAndMaybeWarm(string $targetClass, int|string $parentId): void
     {
-        FlowFieldCache::invalidateAll($targetClass, $parentId);
+        if (\Schtzie\FlowField\FlowFieldBatch::isDeferring()) {
+            \Schtzie\FlowField\FlowFieldBatch::recordInvalidation($targetClass, $parentId);
 
-        if (config('flowfield.auto_warm', false)) {
-            $parent = $targetClass::find($parentId);
-
-            if ($parent) {
-                FlowFieldCache::warm($parent);
-            }
+            return;
         }
+
+        \Schtzie\FlowField\FlowFieldBatch::executeInvalidation($targetClass, $parentId);
     }
 
     protected function hasRelevantChanges(string $targetClass): bool

@@ -116,6 +116,26 @@ class FlowFieldDefinition
 
         // 2. Apply Where Conditions
         foreach ($this->where as $column => $value) {
+            if ($column === '_or' && is_array($value)) {
+                $query->where(function ($q) use ($value, $parent) {
+                    $isFirst = true;
+                    foreach ($value as $conditionGroup) {
+                        if (! is_array($conditionGroup)) {
+                            continue;
+                        }
+
+                        $method = $isFirst ? 'where' : 'orWhere';
+                        $q->$method(function ($subQ) use ($conditionGroup, $parent) {
+                            $subDef = new self(name: 'sub', method: 'exists', relation: null, column: '*', where: $conditionGroup, ttl: null, cacheKey: null);
+                            $subDef->applyWhere($subQ, $parent);
+                        });
+                        $isFirst = false;
+                    }
+                });
+
+                continue;
+            }
+
             // Resolve dynamic parent attribute references (e.g., ':currency_code')
             if (is_string($value) && str_starts_with($value, ':') && $parent !== null) {
                 $value = $parent->getAttribute(substr($value, 1));
@@ -233,16 +253,14 @@ class FlowFieldDefinition
             $columns[] = $this->column;
         }
 
-        foreach ($this->where as $col => $value) {
-            $columns[] = $col;
-        }
+        $columns = array_merge($columns, self::extractColumnsRecursive($this->where));
 
         // For expression FlowFields, track explicitly declared columns
         foreach ($this->expressionColumns as $col) {
             $columns[] = $col;
         }
 
-        return $columns;
+        return array_unique($columns);
     }
 
     /**
@@ -251,7 +269,52 @@ class FlowFieldDefinition
      */
     public function hasDynamicParameters(): bool
     {
-        foreach ($this->where as $value) {
+        return self::checkDynamicParametersRecursive($this->where);
+    }
+
+    /**
+     * Extract columns from where conditions, resolving _or recursively.
+     *
+     * @param  array<string, mixed>  $conditions
+     * @return array<string>
+     */
+    private static function extractColumnsRecursive(array $conditions): array
+    {
+        $cols = [];
+        foreach ($conditions as $col => $value) {
+            if ($col === '_or' && is_array($value)) {
+                foreach ($value as $group) {
+                    if (is_array($group)) {
+                        $cols = array_merge($cols, self::extractColumnsRecursive($group));
+                    }
+                }
+
+                continue;
+            }
+            $cols[] = $col;
+        }
+
+        return $cols;
+    }
+
+    /**
+     * Recursively check where conditions for dynamic parent attribute references.
+     *
+     * @param  array<string, mixed>  $conditions
+     */
+    private static function checkDynamicParametersRecursive(array $conditions): bool
+    {
+        foreach ($conditions as $col => $value) {
+            if ($col === '_or' && is_array($value)) {
+                foreach ($value as $group) {
+                    if (is_array($group) && self::checkDynamicParametersRecursive($group)) {
+                        return true;
+                    }
+                }
+
+                continue;
+            }
+
             if (is_string($value) && str_starts_with($value, ':')) {
                 return true;
             }

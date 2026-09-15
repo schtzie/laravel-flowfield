@@ -318,3 +318,31 @@ it('withFlowFieldsBatch falls back gracefully or calculates dynamic parameters',
     // The amount should be 500
     expect((float) FlowFieldCache::get($a1, 'balance_fcy'))->toBe(500.0);
 });
+
+it('withFlowFieldsBatch supports _or conditions without N+1', function () {
+    $c1 = TestCustomer::create(['name' => 'Cust C']);
+    $c2 = TestCustomer::create(['name' => 'Cust D']);
+
+    // Customer 1: Invoice (100) + Finance Charge (50) = 150
+    TestEntry::withoutEvents(function () use ($c1) {
+        TestEntry::create(['customer_id' => $c1->id, 'amount' => 100, 'type' => 'invoice']);
+        TestEntry::create(['customer_id' => $c1->id, 'amount' => 50, 'type' => 'finance_charge']);
+    });
+
+    // Customer 2: Invoice (-10) + Credit (20) = 0 (both ignored)
+    TestEntry::withoutEvents(function () use ($c2) {
+        TestEntry::create(['customer_id' => $c2->id, 'amount' => -10, 'type' => 'invoice']);
+        TestEntry::create(['customer_id' => $c2->id, 'amount' => 20, 'type' => 'credit']);
+    });
+
+    $queryCount = 0;
+    DB::listen(function () use (&$queryCount) {
+        $queryCount++;
+    });
+
+    TestCustomer::whereIn('id', [$c1->id, $c2->id])->withFlowFieldsBatch('total_receivables')->get();
+
+    expect($queryCount)->toBeLessThanOrEqual(3);
+    expect((float) FlowFieldCache::get($c1, 'total_receivables'))->toBe(150.0);
+    expect((float) FlowFieldCache::get($c2, 'total_receivables'))->toBe(0.0);
+});
