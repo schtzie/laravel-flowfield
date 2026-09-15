@@ -116,5 +116,13 @@ class FlowFieldServiceProvider extends ServiceProvider
                 [$listener, 'handleTickReceived']
             );
         }
+
+        // Octane worker boot
+        if (class_exists(\Laravel\Octane\Events\WorkerStarting::class)) {
+            $events->listen(
+                \Laravel\Octane\Events\WorkerStarting::class,
+                [$listener, 'handleWorkerStarting']
+            );
+        }
     }
 }

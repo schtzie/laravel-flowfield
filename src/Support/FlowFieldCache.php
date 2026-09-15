@@ -64,6 +64,7 @@ class FlowFieldCache
         // Also populate the Octane L1 cache if enabled
         if (static::octaneL1Enabled()) {
             static::$octaneL1[$key] = $value;
+            static::enforceL1Capacity();
         }
     }
 
@@ -345,6 +346,24 @@ class FlowFieldCache
     public static function octaneL1Enabled(): bool
     {
         return (bool) config('flowfield.cache.octane_l1', false);
+    }
+
+    /**
+     * Enforce the maximum number of entries allowed in the L1 static array.
+     */
+    protected static function enforceL1Capacity(): void
+    {
+        $maxEntries = (int) config('flowfield.octane.l1_cache.max_entries', 10000);
+
+        if ($maxEntries <= 0) {
+            return;
+        }
+
+        // Fast FIFO eviction if the limit is exceeded.
+        // We use a while loop in case max_entries was dynamically lowered during runtime.
+        while (count(static::$octaneL1) > $maxEntries) {
+            array_shift(static::$octaneL1);
+        }
     }
 
     /**

@@ -40,7 +40,7 @@
     },
     "scripts": {
         "test": "vendor/bin/pest --no-coverage",
-        "test:coverage": "XDEBUG_MODE=coverage vendor/bin/pest --coverage --coverage-html=.coverage",
+        "test:coverage": "php -d pcov.enabled=1 vendor/bin/pest --coverage --coverage-html=.coverage",
         "test:watch": "vendor/bin/pest --watch",
         "analyse": "vendor/bin/phpstan analyse --memory-limit=512M",
         "analyse:ci": "vendor/bin/phpstan analyse --memory-limit=512M --no-progress --error-format=github",

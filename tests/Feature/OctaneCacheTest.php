@@ -188,3 +188,57 @@ it('filter-aware cache key is stable across calls', function () {
 
     expect($key1)->toBe($key2);
 });
+
+// ---------------------------------------------------------------------------
+// Octane Worker Boot & L1 Limits
+// ---------------------------------------------------------------------------
+
+it('l1_cache.max_entries evicts oldest entries when exceeded', function () {
+    config(['flowfield.cache.octane_l1' => true]);
+    config(['flowfield.octane.l1_cache.max_entries' => 2]);
+
+    $c1 = TestCustomer::create(['name' => 'C1']);
+    $c2 = TestCustomer::create(['name' => 'C2']);
+    $c3 = TestCustomer::create(['name' => 'C3']);
+
+    FlowFieldCache::put($c1, 'balance', 100);
+    FlowFieldCache::put($c2, 'balance', 200);
+    FlowFieldCache::put($c3, 'balance', 300);
+
+    $k1 = FlowFieldCache::buildKey($c1, 'balance');
+    $k2 = FlowFieldCache::buildKey($c2, 'balance');
+    $k3 = FlowFieldCache::buildKey($c3, 'balance');
+
+    // Only the last 2 should remain
+    $reflection = new ReflectionClass(FlowFieldCache::class);
+    $l1Property = $reflection->getProperty('octaneL1');
+    $l1Property->setAccessible(true);
+    $l1State = $l1Property->getValue();
+
+    expect(array_key_exists($k1, $l1State))->toBeFalse();
+    expect(array_key_exists($k2, $l1State))->toBeTrue();
+    expect(array_key_exists($k3, $l1State))->toBeTrue();
+
+    config(['flowfield.cache.octane_l1' => false]);
+});
+
+it('preload_models warms cache on WorkerStarting event', function () {
+    config(['flowfield.octane.preload_models' => [TestCustomer::class]]);
+
+    $customer = TestCustomer::create(['name' => 'Preload Corp']);
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 888, 'type' => 'invoice',
+    ]));
+
+    // Ensure L2 cache is empty
+    $key = FlowFieldCache::buildKey($customer, 'balance');
+    Cache::store('array')->forget($key);
+    expect(Cache::store('array')->get($key))->toBeNull();
+
+    // Trigger WorkerStarting
+    $listener = new Schtzie\FlowField\Listeners\OctaneFlowFieldListener();
+    $listener->handleWorkerStarting(new stdClass());
+
+    // Verify cache was warmed
+    expect((float) Cache::store('array')->get($key))->toBe(888.0);
+});

@@ -60,6 +60,40 @@ class OctaneFlowFieldListener
     }
 
     /**
+     * Handle Octane's WorkerStarting event.
+     * Preloads models configured in `flowfield.octane.preload_models` into L1/L2 cache.
+     */
+    public function handleWorkerStarting(mixed $event): void
+    {
+        $models = config('flowfield.octane.preload_models', []);
+
+        if (! is_array($models) || empty($models)) {
+            return;
+        }
+
+        foreach ($models as $modelClass) {
+            if (! is_string($modelClass) || ! class_exists($modelClass)) {
+                continue;
+            }
+
+            if (! is_subclass_of($modelClass, \Illuminate\Database\Eloquent\Model::class)) {
+                continue;
+            }
+
+            if (! in_array(\Schtzie\FlowField\Concerns\HasFlowFields::class, class_uses_recursive($modelClass))) {
+                continue;
+            }
+
+            // Force the Eloquent query builder to ensure we get hydrated models, not raw stdClass objects
+            $modelClass::query()->chunk(500, function ($records) {
+                foreach ($records as $record) {
+                    FlowFieldCache::warm($record);
+                }
+            });
+        }
+    }
+
+    /**
      * Reset all mutable per-request static state.
      */
     protected function resetState(): void
