@@ -1,276 +1,204 @@
 <?php
 
-namespace Schtzie\FlowField\Tests\Feature;
+declare(strict_types=1);
 
 use Illuminate\Support\Facades\Cache;
 use Schtzie\FlowField\Tests\Fixtures\TestPurchaseLine;
 use Schtzie\FlowField\Tests\Fixtures\TestVendor;
-use Schtzie\FlowField\Tests\TestCase;
 
-/**
- * Vendor Ledger FlowField Tests — Navision Vendor Ledger Entry analog
- *
- * In Business Central, a Vendor card shows Accounts Payable figures that are
- * all Sum or Count FlowFields over the Vendor Ledger Entry table. The key
- * distinction is between OPEN entries (still owed) and CLOSED entries (paid).
- *
- * This test suite exercises conditional where-filtered FlowFields in realistic
- * AP lifecycle scenarios: open → paid status transitions, multi-vendor isolation,
- * re-assignment of a purchase line between vendors.
- */
-class VendorLedgerFlowFieldTest extends TestCase
-{
-    protected TestVendor $supplier;
+beforeEach(function () {
+    $this->supplier = TestVendor::create(['name' => 'Acme Supplies Ltd']);
+});
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+// --- outstanding_amount ---
 
-        $this->supplier = TestVendor::create(['name' => 'Acme Supplies Ltd']);
-    }
+it('outstanding_amount reflects only open lines', function () {
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 500, 'status' => 'open',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 300, 'status' => 'open',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 200, 'status' => 'paid',
+    ]));
 
-    // -------------------------------------------------------------------------
-    // outstanding_amount — Sum with status='open' filter
-    // -------------------------------------------------------------------------
+    expect((float) $this->supplier->outstanding_amount)->toBe(800.0);
+});
 
-    public function test_outstanding_amount_reflects_only_open_lines(): void
-    {
-        // Two open lines
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 500, 'status' => 'open',
-        ]));
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 300, 'status' => 'open',
-        ]));
-        // One already paid — should NOT appear in outstanding
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 200, 'status' => 'paid',
-        ]));
+it('paid_amount reflects only paid lines', function () {
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 1000, 'status' => 'open',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 400, 'status' => 'paid',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 600, 'status' => 'paid',
+    ]));
 
-        $this->assertEquals(800, (float) $this->supplier->outstanding_amount);
-    }
+    expect((float) $this->supplier->paid_amount)->toBe(1000.0);
+});
 
-    public function test_paid_amount_reflects_only_paid_lines(): void
-    {
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 1000, 'status' => 'open',
-        ]));
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 400, 'status' => 'paid',
-        ]));
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 600, 'status' => 'paid',
-        ]));
+it('paying a line shifts amount from outstanding to paid', function () {
+    $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 750, 'status' => 'open',
+    ]));
 
-        $this->assertEquals(1000, (float) $this->supplier->paid_amount);
-    }
+    expect((float) $this->supplier->outstanding_amount)->toBe(750.0);
+    expect((float) $this->supplier->paid_amount)->toBe(0.0);
 
-    public function test_paying_a_line_shifts_amount_from_outstanding_to_paid(): void
-    {
-        $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 750, 'status' => 'open',
-        ]));
+    $line->update(['status' => 'paid']);
 
-        // Before payment
-        $this->assertEquals(750, (float) $this->supplier->outstanding_amount);
-        $this->assertEquals(0, (float) $this->supplier->paid_amount);
+    $fresh = TestVendor::find($this->supplier->id);
+    expect((float) $fresh->outstanding_amount)->toBe(0.0);
+    expect((float) $fresh->paid_amount)->toBe(750.0);
+});
 
-        // Mark line as paid — triggers cache invalidation via InvalidatesFlowFields
-        $line->update(['status' => 'paid']);
+// --- open_order_count ---
 
-        // After payment — fresh values from DB
-        $freshSupplier = TestVendor::find($this->supplier->id);
-        $this->assertEquals(0, (float) $freshSupplier->outstanding_amount);
-        $this->assertEquals(750, (float) $freshSupplier->paid_amount);
-    }
+it('open_order_count decrements after payment', function () {
+    $line1 = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 100, 'status' => 'open',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 200, 'status' => 'open',
+    ]));
 
-    // -------------------------------------------------------------------------
-    // open_order_count — Count with status='open' filter
-    // -------------------------------------------------------------------------
+    expect($this->supplier->open_order_count)->toBe(2);
 
-    public function test_open_order_count_decrements_after_payment(): void
-    {
-        $line1 = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 100, 'status' => 'open',
-        ]));
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 200, 'status' => 'open',
-        ]));
+    $line1->update(['status' => 'paid']);
 
-        $this->assertEquals(2, $this->supplier->open_order_count);
+    expect(TestVendor::find($this->supplier->id)->open_order_count)->toBe(1);
+});
 
-        $line1->update(['status' => 'paid']);
+it('open_order_count is zero when all lines paid', function () {
+    $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 500, 'status' => 'open',
+    ]));
 
-        $freshSupplier = TestVendor::find($this->supplier->id);
-        $this->assertEquals(1, $freshSupplier->open_order_count);
-    }
+    expect($this->supplier->open_order_count)->toBe(1);
 
-    public function test_open_order_count_is_zero_when_all_lines_paid(): void
-    {
-        $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 500, 'status' => 'open',
-        ]));
+    $line->update(['status' => 'paid']);
 
-        $this->assertEquals(1, $this->supplier->open_order_count);
+    expect(TestVendor::find($this->supplier->id)->open_order_count)->toBe(0);
+});
 
-        $line->update(['status' => 'paid']);
+// --- has_open_orders ---
 
-        $freshSupplier = TestVendor::find($this->supplier->id);
-        $this->assertEquals(0, $freshSupplier->open_order_count);
-    }
+it('has_open_orders is true when open lines exist', function () {
+    TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 250, 'status' => 'open',
+    ]);
 
-    // -------------------------------------------------------------------------
-    // has_open_orders — Exists with status='open' filter
-    // -------------------------------------------------------------------------
+    expect(TestVendor::find($this->supplier->id)->has_open_orders)->toBeTrue();
+});
 
-    public function test_has_open_orders_is_true_when_open_lines_exist(): void
-    {
-        TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 250, 'status' => 'open',
-        ]);
+it('has_open_orders flips to false when last open line is paid', function () {
+    $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 250, 'status' => 'open',
+    ]));
 
-        $freshSupplier = TestVendor::find($this->supplier->id);
-        $this->assertTrue($freshSupplier->has_open_orders);
-    }
+    expect($this->supplier->has_open_orders)->toBeTrue();
 
-    public function test_has_open_orders_flips_to_false_when_last_open_line_is_paid(): void
-    {
-        $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 250, 'status' => 'open',
-        ]));
+    $line->update(['status' => 'paid']);
 
-        $this->assertTrue($this->supplier->has_open_orders);
+    expect(TestVendor::find($this->supplier->id)->has_open_orders)->toBeFalse();
+});
 
-        $line->update(['status' => 'paid']);
+it('has_open_orders is false for vendor with no lines', function () {
+    expect($this->supplier->has_open_orders)->toBeFalse();
+});
 
-        $freshSupplier = TestVendor::find($this->supplier->id);
-        $this->assertFalse($freshSupplier->has_open_orders);
-    }
+// --- largest_order ---
 
-    public function test_has_open_orders_is_false_for_vendor_with_no_lines(): void
-    {
-        $this->assertFalse($this->supplier->has_open_orders);
-    }
+it('largest_order reflects true maximum', function () {
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 100, 'status' => 'open',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 9999, 'status' => 'open',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 50, 'status' => 'paid',
+    ]));
 
-    // -------------------------------------------------------------------------
-    // largest_order — Max FlowField
-    // -------------------------------------------------------------------------
+    expect((float) $this->supplier->largest_order)->toBe(9999.0);
+});
 
-    public function test_largest_order_always_reflects_true_maximum(): void
-    {
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 100, 'status' => 'open',
-        ]));
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 9999, 'status' => 'open',
-        ]));
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 50, 'status' => 'paid',
-        ]));
+// --- average_order_value ---
 
-        $this->assertEquals(9999, (float) $this->supplier->largest_order);
-    }
+it('average_order_value recalculates on new line', function () {
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 100, 'status' => 'open',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 200, 'status' => 'open',
+    ]));
 
-    // -------------------------------------------------------------------------
-    // average_order_value — Avg FlowField
-    // -------------------------------------------------------------------------
+    expect((float) $this->supplier->average_order_value)->toEqualWithDelta(150.0, 0.01);
 
-    public function test_average_order_value_recalculates_on_new_line(): void
-    {
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 100, 'status' => 'open',
-        ]));
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 200, 'status' => 'open',
-        ]));
+    TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 300, 'status' => 'open',
+    ]);
 
-        // avg = (100 + 200) / 2 = 150
-        $this->assertEqualsWithDelta(150.0, (float) $this->supplier->average_order_value, 0.01);
+    expect((float) TestVendor::find($this->supplier->id)->average_order_value)->toEqualWithDelta(200.0, 0.01);
+});
 
-        // Add a third line (cache invalidated by the create event)
-        TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 300, 'status' => 'open',
-        ]);
+// --- Multi-vendor isolation ---
 
-        // avg = (100 + 200 + 300) / 3 = 200
-        $freshSupplier = TestVendor::find($this->supplier->id);
-        $this->assertEqualsWithDelta(200.0, (float) $freshSupplier->average_order_value, 0.01);
-    }
+it('flowfields are isolated per vendor', function () {
+    $other = TestVendor::create(['name' => 'Beta Wholesalers']);
 
-    // -------------------------------------------------------------------------
-    // Multi-vendor isolation
-    // -------------------------------------------------------------------------
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 1000, 'status' => 'open',
+    ]));
+    TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $other->id, 'amount' => 250, 'status' => 'open',
+    ]));
 
-    public function test_flowfields_are_isolated_per_vendor(): void
-    {
-        $otherSupplier = TestVendor::create(['name' => 'Beta Wholesalers']);
+    expect((float) $this->supplier->outstanding_amount)->toBe(1000.0);
+    expect((float) $other->outstanding_amount)->toBe(250.0);
+});
 
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 1000, 'status' => 'open',
-        ]));
-        TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $otherSupplier->id, 'amount' => 250, 'status' => 'open',
-        ]));
+// --- Cross-vendor invalidation ---
 
-        $this->assertEquals(1000, (float) $this->supplier->outstanding_amount);
-        $this->assertEquals(250, (float) $otherSupplier->outstanding_amount);
-    }
+it('reassigning purchase line invalidates both vendors caches', function () {
+    $other = TestVendor::create(['name' => 'Beta Wholesalers']);
 
-    // -------------------------------------------------------------------------
-    // Cross-vendor cache invalidation — re-assigning a line
-    // -------------------------------------------------------------------------
+    $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 500, 'status' => 'open',
+    ]));
 
-    public function test_reassigning_purchase_line_invalidates_both_vendors_caches(): void
-    {
-        $otherSupplier = TestVendor::create(['name' => 'Beta Wholesalers']);
+    $this->supplier->calcFlowFields('outstanding_amount');
+    $other->calcFlowFields('outstanding_amount');
 
-        $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 500, 'status' => 'open',
-        ]));
+    $key1 = "flowfield:test_vendors:{$this->supplier->id}:outstanding_amount";
+    $key2 = "flowfield:test_vendors:{$other->id}:outstanding_amount";
 
-        // Prime caches for both vendors
-        $this->supplier->calcFlowFields('outstanding_amount');
-        $otherSupplier->calcFlowFields('outstanding_amount');
+    expect(Cache::store('array')->get($key1))->not->toBeNull();
+    expect(Cache::store('array')->get($key2))->not->toBeNull();
 
-        $cacheKey1 = "flowfield:test_vendors:{$this->supplier->id}:outstanding_amount";
-        $cacheKey2 = "flowfield:test_vendors:{$otherSupplier->id}:outstanding_amount";
+    $line->update(['vendor_id' => $other->id]);
 
-        $this->assertNotNull(Cache::store('array')->get($cacheKey1));
-        $this->assertNotNull(Cache::store('array')->get($cacheKey2));
+    expect(Cache::store('array')->get($key1))->toBeNull();
+    expect(Cache::store('array')->get($key2))->toBeNull();
 
-        // Move the line to the other vendor
-        $line->update(['vendor_id' => $otherSupplier->id]);
+    expect((float) TestVendor::find($this->supplier->id)->outstanding_amount)->toBe(0.0);
+    expect((float) TestVendor::find($other->id)->outstanding_amount)->toBe(500.0);
+});
 
-        // Both caches must be invalidated
-        $this->assertNull(Cache::store('array')->get($cacheKey1), 'Original vendor cache must be cleared');
-        $this->assertNull(Cache::store('array')->get($cacheKey2), 'New vendor cache must be cleared');
+it('updating only irrelevant column does not invalidate cache', function () {
+    $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
+        'vendor_id' => $this->supplier->id, 'amount' => 300, 'status' => 'open',
+    ]));
 
-        // Values must now be correct for both
-        $freshSupplier1 = TestVendor::find($this->supplier->id);
-        $freshSupplier2 = TestVendor::find($otherSupplier->id);
+    $this->supplier->calcFlowFields('outstanding_amount');
+    $key = "flowfield:test_vendors:{$this->supplier->id}:outstanding_amount";
+    $cachedBefore = Cache::store('array')->get($key);
 
-        $this->assertEquals(0, (float) $freshSupplier1->outstanding_amount);
-        $this->assertEquals(500, (float) $freshSupplier2->outstanding_amount);
-    }
+    $line->updated_at = now()->addHour();
+    $line->save();
 
-    // -------------------------------------------------------------------------
-    // Cache invalidation on relevant column change only
-    // -------------------------------------------------------------------------
-
-    public function test_updating_only_irrelevant_column_does_not_invalidate_cache(): void
-    {
-        $line = TestPurchaseLine::withoutEvents(fn () => TestPurchaseLine::create([
-            'vendor_id' => $this->supplier->id, 'amount' => 300, 'status' => 'open',
-        ]));
-
-        $this->supplier->calcFlowFields('outstanding_amount');
-        $cacheKey = "flowfield:test_vendors:{$this->supplier->id}:outstanding_amount";
-        $cachedBefore = Cache::store('array')->get($cacheKey);
-
-        // Touch timestamps only — no relevant column changed
-        $line->updated_at = now()->addHour();
-        $line->save();
-
-        $this->assertEquals($cachedBefore, Cache::store('array')->get($cacheKey));
-    }
-}
+    expect(Cache::store('array')->get($key))->toBe($cachedBefore);
+});

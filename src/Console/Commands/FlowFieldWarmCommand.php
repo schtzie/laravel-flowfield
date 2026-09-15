@@ -1,7 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Schtzie\FlowField\Console\Commands;
 
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Schtzie\FlowField\Support\FlowFieldCache;
 
 class FlowFieldWarmCommand extends BaseFlowFieldCommand
@@ -15,11 +19,12 @@ class FlowFieldWarmCommand extends BaseFlowFieldCommand
 
     public function handle(): int
     {
-        $modelClass = $this->argument('model');
-        $id = $this->option('id');
-        $field = $this->option('field');
+        // argument() / option() return mixed — narrow to string|null
+        $modelClass = is_string($this->argument('model')) ? $this->argument('model') : null;
+        $id = is_scalar($this->option('id')) ? (string) $this->option('id') : null;
+        $field = is_scalar($this->option('field')) ? (string) $this->option('field') : null;
 
-        if ($modelClass) {
+        if ($modelClass !== null) {
             return $this->warmModel($modelClass, $id, $field);
         }
 
@@ -44,12 +49,15 @@ class FlowFieldWarmCommand extends BaseFlowFieldCommand
             return self::FAILURE;
         }
 
-        $fields = $field ? [$field] : null;
+        /** @var array<string>|null $fields */
+        $fields = $field !== null ? [$field] : null;
 
-        if ($id) {
+        if ($id !== null) {
+            /** @var class-string<Model> $modelClass */
+            /** @var Model|null $model */
             $model = $modelClass::find($id);
 
-            if (! $model) {
+            if ($model === null) {
                 $this->error("Record {$id} not found in {$modelClass}.");
 
                 return self::FAILURE;
@@ -66,8 +74,10 @@ class FlowFieldWarmCommand extends BaseFlowFieldCommand
         $bar = $this->output->createProgressBar();
         $bar->start();
 
-        $modelClass::query()->chunk(200, function ($records) use ($bar, $fields) {
+        /** @var class-string<Model> $modelClass */
+        $modelClass::query()->chunk(200, function (Collection $records) use ($bar, $fields): void {
             foreach ($records as $record) {
+                /** @var Model $record */
                 FlowFieldCache::warm($record, $fields);
                 $bar->advance();
             }

@@ -70,6 +70,7 @@ abstract class TestCase extends Orchestra
             $table->foreignId('item_id')->constrained('test_items');
             $table->string('movement_type'); // purchase | sale | adjustment
             $table->decimal('quantity', 12, 4)->default(0);
+            $table->decimal('unit_cost', 12, 4)->default(0);
             $table->timestamp('posted_at')->nullable();
             $table->timestamps();
             $table->softDeletes();
@@ -108,6 +109,48 @@ abstract class TestCase extends Orchestra
             $table->morphs('commentable'); // commentable_type + commentable_id
             $table->string('body');
             $table->integer('length')->default(0);
+            $table->timestamps();
+        });
+
+        // --- Accounting domain: G/L Account / G/L Entry ---
+        Schema::create('test_gl_accounts', function (Blueprint $table) {
+            $table->id();
+            $table->string('no')->unique();
+            $table->string('name');
+            $table->string('currency_code')->default('USD'); // Default parent currency
+            $table->timestamps();
+        });
+
+        Schema::create('test_gl_entries', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('gl_account_id')->constrained('test_gl_accounts');
+            $table->decimal('amount', 12, 2)->default(0);
+            $table->decimal('debit_amount', 12, 2)->default(0);
+            $table->decimal('credit_amount', 12, 2)->default(0);
+            $table->string('currency_code')->default('USD');
+            $table->date('posting_date')->nullable();
+            $table->string('department_code')->nullable();
+            $table->string('document_type')->nullable(); // 'Invoice', 'Payment'
+            $table->boolean('posted')->default(true);
+            $table->timestamps();
+        });
+
+        // --- Invoicing domain: Invoice / Invoice Line (For whereHas and Aging) ---
+        Schema::create('test_invoices', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('customer_id')->nullable()->constrained('test_customers');
+            $table->string('no')->unique();
+            $table->string('status')->default('draft'); // draft | posted | paid
+            $table->date('due_date')->nullable();
+            $table->decimal('remaining_amount', 12, 2)->default(0);
+            $table->timestamps();
+        });
+
+        Schema::create('test_invoice_lines', function (Blueprint $table) {
+            $table->id();
+            $table->foreignId('invoice_id')->constrained('test_invoices');
+            $table->decimal('amount', 12, 2)->default(0);
+            $table->decimal('cost_amount', 12, 2)->default(0);
             $table->timestamps();
         });
     }

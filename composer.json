@@ -20,7 +20,13 @@
     "require-dev": {
         "laravel/pint": "^1.0",
         "orchestra/testbench": "^8.0|^9.0|^10.0|^11.0|^12.0",
-        "phpunit/phpunit": "^10.0|^11.0|^12.0"
+        "phpunit/phpunit": "^10.0|^11.0|^12.0",
+        "pestphp/pest": "^3.0",
+        "larastan/larastan": "^3.0",
+        "phpstan/phpstan": "^2.0",
+        "aws/aws-sdk-php": "^3.395",
+        "laravel/octane": "^2.19",
+        "predis/predis": "^3.6"
     },
     "autoload": {
         "psr-4": {
@@ -33,9 +39,18 @@
         }
     },
     "scripts": {
-        "test": "vendor/bin/phpunit",
+        "test": "vendor/bin/pest --no-coverage",
+        "test:coverage": "XDEBUG_MODE=coverage vendor/bin/pest --coverage --coverage-html=.coverage",
+        "test:watch": "vendor/bin/pest --watch",
+        "analyse": "vendor/bin/phpstan analyse --memory-limit=512M",
+        "analyse:ci": "vendor/bin/phpstan analyse --memory-limit=512M --no-progress --error-format=github",
         "lint": "vendor/bin/pint",
-        "lint:check": "vendor/bin/pint --test"
+        "lint:check": "vendor/bin/pint --test",
+        "check": [
+            "@lint",
+            "@analyse",
+            "@test"
+        ]
     },
     "extra": {
         "laravel": {
@@ -45,5 +60,16 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "config": {
+        "policy": {
+            "advisories": {
+                "block": false
+            }
+        },
+        "allow-plugins": {
+            "pestphp/pest-plugin": true,
+            "phpstan/extension-installer": true
+        }
+    }
 }

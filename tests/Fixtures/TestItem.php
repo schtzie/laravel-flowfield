@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Schtzie\FlowField\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -109,6 +111,31 @@ class TestItem extends Model
      */
     #[FlowField(method: 'count', relation: 'stockMovements', column: 'movement_type', distinct: true)]
     protected function distinctMovementTypeCount(): Attribute
+    {
+        return Attribute::make(get: fn () => null);
+    }
+
+    // -------------------------------------------------------------------------
+    // Feature: Weighted Average Cost & Inventory Value Formula
+    // -------------------------------------------------------------------------
+
+    #[FlowField(
+        method: 'wavg',
+        relation: 'stockMovements',
+        column: 'unit_cost',
+        weightColumn: 'quantity',
+        where: ['movement_type' => 'purchase']
+    )]
+    protected function weightedAvgCost(): Attribute
+    {
+        return Attribute::make(get: fn () => null);
+    }
+
+    #[FlowField(
+        method: 'formula',
+        expression: 'inventory_quantity * weighted_avg_cost'
+    )]
+    protected function inventoryValue(): Attribute
     {
         return Attribute::make(get: fn () => null);
     }

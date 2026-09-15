@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Schtzie\FlowField\Concerns;
 
 use Schtzie\FlowField\Support\FlowFieldCache;

@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Schtzie\FlowField\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Casts\Attribute;
@@ -20,6 +22,11 @@ class TestCustomer extends Model
         return $this->hasMany(TestEntry::class, 'customer_id');
     }
 
+    public function invoices()
+    {
+        return $this->hasMany(TestInvoice::class, 'customer_id');
+    }
+
     /**
      * A hasOne relation pointing to the most recent entry — used by the
      * `lookup` FlowField below to fetch a single field value.
@@ -27,6 +34,46 @@ class TestCustomer extends Model
     public function latestEntry()
     {
         return $this->hasOne(TestEntry::class, 'customer_id')->latestOfMany();
+    }
+
+    // -------------------------------------------------------------------------
+    // ERP Features
+    // -------------------------------------------------------------------------
+
+    // 1. Aging buckets (0-30 days, 31-60, etc.)
+    #[FlowField(
+        method: 'sum',
+        relation: 'invoices',
+        column: 'remaining_amount',
+        aging: ['column' => 'due_date', 'bucket' => 'current']
+    )]
+    protected function agingCurrent(): Attribute
+    {
+        return Attribute::make(get: fn () => null);
+    }
+
+    #[FlowField(
+        method: 'sum',
+        relation: 'invoices',
+        column: 'remaining_amount',
+        aging: ['column' => 'due_date', 'bucket' => '1_30']
+    )]
+    protected function aging30(): Attribute
+    {
+        return Attribute::make(get: fn () => null);
+    }
+
+    // 2. whereHas (Nested Relation Filtering)
+    // Sum of invoice remaining amounts where the invoice HAS lines with cost > 100
+    #[FlowField(
+        method: 'sum',
+        relation: 'invoices',
+        column: 'remaining_amount',
+        whereHas: ['lines' => ['cost_amount' => ['>', 100]]]
+    )]
+    protected function highCostInvoiceBalance(): Attribute
+    {
+        return Attribute::make(get: fn () => null);
     }
 
     // -------------------------------------------------------------------------

@@ -1,0 +1,2 @@
+select * from "test_invoices" where "test_invoices"."customer_id" = ? and "test_invoices"."customer_id" is not null and "due_date" between ? and ?
+[1,"2026-08-16","2026-09-14"]

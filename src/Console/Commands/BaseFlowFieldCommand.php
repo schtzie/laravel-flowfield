@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Schtzie\FlowField\Console\Commands;
 
 use Illuminate\Console\Command;
@@ -25,6 +27,11 @@ abstract class BaseFlowFieldCommand extends Command
         return true;
     }
 
+    /**
+     * Discover all App\Models classes that use HasFlowFields.
+     *
+     * @return array<string>
+     */
     protected function discoverModels(): array
     {
         $modelsPath = app_path('Models');
@@ -33,6 +40,7 @@ abstract class BaseFlowFieldCommand extends Command
             return [];
         }
 
+        /** @var array<string> $models */
         $models = [];
 
         foreach (File::allFiles($modelsPath) as $file) {

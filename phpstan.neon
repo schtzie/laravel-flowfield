@@ -1,0 +1,69 @@
+includes:
+    - vendor/larastan/larastan/extension.neon
+
+parameters:
+
+    # -------------------------------------------------------------------------
+    # Paths to analyse (source code only — not tests or vendor)
+    # -------------------------------------------------------------------------
+    paths:
+        - src
+
+    # -------------------------------------------------------------------------
+    # Analysis level
+    # Level 8 enforces strict return types, catches dead branches, and prevents
+    # undefined property access, while avoiding the exhaustive generic type
+    # boilerplate required by level 9 (max) for Eloquent Builders/Relations.
+    # -------------------------------------------------------------------------
+    level: 8
+
+    # -------------------------------------------------------------------------
+    # Larastan — Laravel-specific checks
+    # -------------------------------------------------------------------------
+
+    # Detect static properties / singletons that survive across Octane requests
+    # and could cause request-state leakage (stale data between requests).
+    checkOctaneCompatibility: true
+
+    # Validate that properties accessed on Eloquent models actually exist as
+    # declared columns, casts, or relations — catches typos and ghost fields.
+    checkModelProperties: true
+
+    # -------------------------------------------------------------------------
+    # PHPStan — additional strictness flags
+    # -------------------------------------------------------------------------
+
+    # Require @var annotations on all local variables assigned from mixed-typed
+    # expressions so that the type system can narrow properly.
+    checkMissingVarTagTypehint: true
+
+    # Ensure every class property is assigned in __construct() or has a default
+    # value — prevents access to uninitialised properties at runtime.
+    checkUninitializedProperties: true
+
+    # Fail if an ignoreErrors pattern or identifier matches nothing in the
+    # analysed code — keeps suppressions in sync with the actual source.
+    reportUnmatchedIgnoredErrors: true
+
+    # -------------------------------------------------------------------------
+    # Suppress known false-positives
+    # -------------------------------------------------------------------------
+    ignoreErrors:
+        # PHPStan cannot analyse traits that have no usages inside the analysed
+        # source tree. All three traits are used by consumer models at runtime
+        # but no class under src/ itself uses them directly.
+        - identifier: trait.unused
+
+    # -------------------------------------------------------------------------
+    # Exclude paths from analysis
+    # -------------------------------------------------------------------------
+    excludePaths:
+        # JsonResource sub-classes require a fully-booted Laravel container
+        # and registered view / response factories — unavailable in a package.
+        - src/Http
+
+    # -------------------------------------------------------------------------
+    # Parallel processing
+    # -------------------------------------------------------------------------
+    parallel:
+        maximumNumberOfProcesses: 4

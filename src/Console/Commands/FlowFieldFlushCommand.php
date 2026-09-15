@@ -1,7 +1,11 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Schtzie\FlowField\Console\Commands;
 
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model;
 use Schtzie\FlowField\Support\FlowFieldCache;
 
 class FlowFieldFlushCommand extends BaseFlowFieldCommand
@@ -14,14 +18,17 @@ class FlowFieldFlushCommand extends BaseFlowFieldCommand
 
     public function handle(): int
     {
-        $modelClass = $this->argument('model');
-        $id = $this->option('id');
+        // argument() returns mixed — narrow to string|null
+        $modelClass = is_string($this->argument('model')) ? $this->argument('model') : null;
+        // option() returns mixed — narrow to string|null
+        $id = is_scalar($this->option('id')) ? (string) $this->option('id') : null;
 
-        if ($modelClass) {
+        if ($modelClass !== null) {
             return $this->flushModel($modelClass, $id);
         }
 
-        if (! $modelClass && $id) {
+        // At this point $modelClass is empty — only --id without a model is invalid.
+        if ($id !== null) {
             $this->error('You must specify a model when using --id.');
 
             return self::FAILURE;
@@ -50,7 +57,8 @@ class FlowFieldFlushCommand extends BaseFlowFieldCommand
             return self::FAILURE;
         }
 
-        if ($id) {
+        if ($id !== null) {
+            /** @var class-string<Model> $modelClass */
             FlowFieldCache::invalidateAll($modelClass, $id);
             $this->info("Flushed FlowFields for {$modelClass} #{$id}.");
 
@@ -59,9 +67,11 @@ class FlowFieldFlushCommand extends BaseFlowFieldCommand
 
         $this->info("Flushing FlowFields for {$modelClass}...");
 
-        $modelClass::query()->chunk(200, function ($records) use ($modelClass) {
+        /** @var class-string<Model> $modelClass */
+        $modelClass::query()->chunk(200, function (Collection $records) use ($modelClass): void {
             foreach ($records as $record) {
-                FlowFieldCache::invalidateAll($modelClass, $record->getKey());
+                /** @var Model $record */
+                FlowFieldCache::invalidateAll($modelClass, (string) $record->getKey());
             }
         });
 

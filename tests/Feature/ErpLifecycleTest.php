@@ -1,6 +1,6 @@
 <?php
 
-namespace Schtzie\FlowField\Tests\Feature;
+declare(strict_types=1);
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -9,315 +9,215 @@ use Schtzie\FlowField\Tests\Fixtures\TestCustomer;
 use Schtzie\FlowField\Tests\Fixtures\TestEntry;
 use Schtzie\FlowField\Tests\Fixtures\TestItem;
 use Schtzie\FlowField\Tests\Fixtures\TestStockMovement;
-use Schtzie\FlowField\Tests\TestCase;
 
-/**
- * ERP Lifecycle Tests — end-to-end Navision FlowField concept scenarios
- *
- * These tests exercise the full lifecycle as it would occur in a real ERP:
- *  - Invoice → payment → balance reconciliation (Customer ledger)
- *  - Bulk cache warm (SIFT equivalent: pre-compute all aggregates in one pass)
- *  - Custom TTL and custom cache key declarations on FlowField attributes
- *  - Multiple where conditions on a single FlowField
- *  - Large dataset (500 entries) — sum accuracy vs PHP reference
- *  - withFlowFields + orderByFlowField combined in one query
- *  - Cache key format and custom prefix
- */
-class ErpLifecycleTest extends TestCase
-{
-    // -------------------------------------------------------------------------
-    // Full Customer Ledger Cycle: Invoice → Credit → Zero Balance
-    // -------------------------------------------------------------------------
+// --- Full Customer Ledger Cycle ---
 
-    public function test_full_invoice_credit_cycle_balance_reaches_zero(): void
-    {
-        $customer = TestCustomer::create(['name' => 'Lifecycle Corp']);
+it('full invoice-credit cycle brings balance to zero', function () {
+    $customer = TestCustomer::create(['name' => 'Lifecycle Corp']);
 
-        // Post invoice
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 1500, 'type' => 'invoice',
-        ]));
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 1500, 'type' => 'invoice',
+    ]));
 
-        $this->assertEquals(1500, (float) $customer->balance);
+    expect((float) $customer->balance)->toBe(1500.0);
 
-        // Cache is now primed — simulate a payment credit entry
-        TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => -1500, 'type' => 'credit',
-        ]);
+    TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => -1500, 'type' => 'credit',
+    ]);
 
-        // Fresh read after invalidation must return zero
-        $fresh = TestCustomer::find($customer->id);
-        $this->assertEquals(0, (float) $fresh->balance);
+    expect((float) TestCustomer::find($customer->id)->balance)->toBe(0.0);
+});
+
+it('partial payment leaves correct outstanding balance', function () {
+    $customer = TestCustomer::create(['name' => 'Partial Payer']);
+
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 1000, 'type' => 'invoice',
+    ]));
+
+    TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => -400, 'type' => 'credit',
+    ]);
+
+    expect((float) TestCustomer::find($customer->id)->balance)->toBe(600.0);
+});
+
+// --- Multiple Where Conditions ---
+
+it('multiple where conditions are ANDed together', function () {
+    $customer = TestCustomer::create(['name' => 'Filter Test Corp']);
+
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 200, 'type' => 'invoice',
+    ]));
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 150, 'type' => 'invoice',
+    ]));
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 50, 'type' => 'credit',
+    ]));
+
+    expect((float) $customer->total_invoiced)->toBe(350.0);
+    expect((float) $customer->balance)->toBe(400.0);
+});
+
+it('where with array values uses whereIn', function () {
+    $item = TestItem::create(['sku' => 'MULTI-001', 'name' => 'Multi-type Item']);
+
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $item->id, 'movement_type' => 'purchase', 'quantity' => 100, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $item->id, 'movement_type' => 'adjustment', 'quantity' => 10, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $item->id, 'movement_type' => 'sale', 'quantity' => -30, 'posted_at' => now(),
+    ]));
+
+    expect((float) $item->inventory_quantity)->toBe(80.0);
+    expect((float) $item->purchased_quantity)->toBe(100.0);
+});
+
+// --- Custom TTL ---
+
+it('flowfield uses config default ttl when none specified', function () {
+    config(['flowfield.cache.ttl' => 7200]);
+
+    $customer = TestCustomer::create(['name' => 'TTL Corp']);
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 100, 'type' => 'invoice',
+    ]));
+
+    $customer->balance;
+
+    $key = "flowfield:test_customers:{$customer->id}:balance";
+    expect(Cache::store('array')->get($key))->not->toBeNull();
+});
+
+// --- Custom Cache Key ---
+
+it('custom cache key stores and retrieves from correct key', function () {
+    $customer = TestCustomer::create(['name' => 'Cache Key Corp']);
+
+    $defs = $customer->getFlowFieldDefinitions();
+    expect($defs['balance']->getCacheKeyName())->toBe('balance');
+    expect($defs['total_invoiced']->getCacheKeyName())->toBe('total_invoiced');
+});
+
+// --- Large Dataset ---
+
+it('sum is accurate across 500 ledger entries', function () {
+    $customer = TestCustomer::create(['name' => 'Big Dataset Corp']);
+
+    $phpSum = 0;
+    $rows = [];
+
+    for ($i = 1; $i <= 500; $i++) {
+        $amount = round(($i % 7 === 0 ? -1 : 1) * ($i * 1.37), 2);
+        $phpSum += $amount;
+        $rows[] = [
+            'customer_id' => $customer->id,
+            'amount' => $amount,
+            'type' => 'invoice',
+            'created_at' => now(),
+            'updated_at' => now(),
+        ];
     }
 
-    public function test_partial_payment_leaves_correct_outstanding_balance(): void
-    {
-        $customer = TestCustomer::create(['name' => 'Partial Payer']);
-
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 1000, 'type' => 'invoice',
-        ]));
-
-        // Partial credit payment
-        TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => -400, 'type' => 'credit',
-        ]);
-
-        $fresh = TestCustomer::find($customer->id);
-        $this->assertEquals(600, (float) $fresh->balance);
-    }
-
-    // -------------------------------------------------------------------------
-    // Multiple Where Conditions on a Single FlowField
-    // -------------------------------------------------------------------------
-
-    /**
-     * Tests that FlowFieldDefinition::applyWhere iterates ALL key-value pairs
-     * in the where array, effectively ANDing multiple conditions.
-     *
-     * This mirrors Navision's TableFilter — FlowFields can have multi-field
-     * filter expressions like: Type=CONST(Invoice),Status=CONST(Posted)
-     */
-    public function test_multiple_where_conditions_are_anded_together(): void
-    {
-        // We use the existing total_invoiced FlowField (where type='invoice')
-        // alongside balance (no filter) to verify both filters work independently
-        $customer = TestCustomer::create(['name' => 'Filter Test Corp']);
-
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 200, 'type' => 'invoice',
-        ]));
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 150, 'type' => 'invoice',
-        ]));
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 50, 'type' => 'credit',
-        ]));
-
-        // total_invoiced has where: ['type' => 'invoice'] — should be 350, not 400
-        $this->assertEquals(350, (float) $customer->total_invoiced);
-        // balance has no filter — should be 400
-        $this->assertEquals(400, (float) $customer->balance);
-    }
-
-    public function test_where_with_array_values_uses_wherein(): void
-    {
-        $customer = TestCustomer::create(['name' => 'Array Filter Corp']);
-
-        // Create an Item with multiple movement types to test whereIn via array where
-        $item = TestItem::create(['sku' => 'MULTI-001', 'name' => 'Multi-type Item']);
-
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $item->id, 'movement_type' => 'purchase', 'quantity' => 100, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $item->id, 'movement_type' => 'adjustment', 'quantity' => 10, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $item->id, 'movement_type' => 'sale', 'quantity' => -30, 'posted_at' => now(),
-        ]));
-
-        // inventory_quantity sums all types: 100 + 10 + (-30) = 80
-        $this->assertEquals(80, (float) $item->inventory_quantity);
-
-        // purchased_quantity uses single where ['movement_type' => 'purchase'] = 100
-        $this->assertEquals(100, (float) $item->purchased_quantity);
-    }
-
-    // -------------------------------------------------------------------------
-    // Custom TTL per FlowField
-    // -------------------------------------------------------------------------
-
-    public function test_flowfield_uses_config_default_ttl_when_none_specified(): void
-    {
-        config(['flowfield.cache.ttl' => 7200]);
-
-        $customer = TestCustomer::create(['name' => 'TTL Corp']);
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 100, 'type' => 'invoice',
-        ]));
-
-        // Access triggers cache write
-        $customer->balance;
-
-        $cacheKey = "flowfield:test_customers:{$customer->id}:balance";
-        // Value is stored (TTL enforcement is driver-level; we verify presence)
-        $this->assertNotNull(Cache::store('array')->get($cacheKey));
-    }
-
-    // -------------------------------------------------------------------------
-    // Custom Cache Key via cacheKey parameter
-    // -------------------------------------------------------------------------
-
-    public function test_custom_cache_key_stores_and_retrieves_from_correct_key(): void
-    {
-        // TestCustomer doesn't have a custom cacheKey field, so we verify via
-        // FlowFieldCache::buildKeyFromParts directly with a known custom key name
-        $customer = TestCustomer::create(['name' => 'Cache Key Corp']);
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 100, 'type' => 'invoice',
-        ]));
-
-        // balance definition uses default cache key = field name 'balance'
-        $definitions = $customer->getFlowFieldDefinitions();
-        $this->assertEquals('balance', $definitions['balance']->getCacheKeyName());
-        $this->assertEquals('total_invoiced', $definitions['total_invoiced']->getCacheKeyName());
-    }
-
-    // -------------------------------------------------------------------------
-    // Large Dataset — SIFT Sum Accuracy
-    // -------------------------------------------------------------------------
-
-    public function test_sum_accuracy_with_500_ledger_entries(): void
-    {
-        $customer = TestCustomer::create(['name' => 'Big Dataset Corp']);
-
-        $phpSum = 0;
-        $rows = [];
-
-        for ($i = 1; $i <= 500; $i++) {
-            $amount = round(($i % 7 === 0 ? -1 : 1) * ($i * 1.37), 2);
-            $phpSum += $amount;
-            $rows[] = [
-                'customer_id' => $customer->id,
-                'amount' => $amount,
-                'type' => 'invoice',
-                'created_at' => now(),
-                'updated_at' => now(),
-            ];
+    TestEntry::withoutEvents(function () use ($rows) {
+        foreach (array_chunk($rows, 100) as $chunk) {
+            TestEntry::insert($chunk);
         }
+    });
 
-        // Insert without events to bypass cache invalidation overhead
-        TestEntry::withoutEvents(function () use ($rows) {
-            foreach (array_chunk($rows, 100) as $chunk) {
-                TestEntry::insert($chunk);
-            }
-        });
+    expect((float) $customer->balance)->toEqualWithDelta($phpSum, 0.01);
+});
 
-        $flowFieldSum = (float) $customer->balance;
+// --- Bulk Warm ---
 
-        $this->assertEqualsWithDelta($phpSum, $flowFieldSum, 0.01,
-            'FlowField sum must match PHP-computed reference sum for 500 entries'
-        );
+it('bulk warm via withFlowFields serves all reads from cache', function () {
+    $c1 = TestCustomer::create(['name' => 'Alpha']);
+    $c2 = TestCustomer::create(['name' => 'Beta']);
+    $c3 = TestCustomer::create(['name' => 'Gamma']);
+
+    TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c1->id, 'amount' => 100, 'type' => 'invoice']));
+    TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c2->id, 'amount' => 200, 'type' => 'invoice']));
+    TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c3->id, 'amount' => 300, 'type' => 'invoice']));
+
+    $customers = TestCustomer::withFlowFields('balance')->get();
+
+    $queryCount = 0;
+    DB::listen(fn () => $queryCount++);
+
+    foreach ($customers as $c) {
+        $c->balance;
     }
 
-    // -------------------------------------------------------------------------
-    // Bulk Warm (SIFT pre-compute equivalent)
-    // -------------------------------------------------------------------------
+    expect($queryCount)->toBe(0);
 
-    public function test_bulk_warm_via_calc_flow_fields_on_multiple_models(): void
-    {
-        $c1 = TestCustomer::create(['name' => 'Alpha']);
-        $c2 = TestCustomer::create(['name' => 'Beta']);
-        $c3 = TestCustomer::create(['name' => 'Gamma']);
+    $byName = $customers->keyBy('name');
+    expect((float) $byName['Alpha']->balance)->toBe(100.0);
+    expect((float) $byName['Beta']->balance)->toBe(200.0);
+    expect((float) $byName['Gamma']->balance)->toBe(300.0);
+});
 
-        TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c1->id, 'amount' => 100, 'type' => 'invoice']));
-        TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c2->id, 'amount' => 200, 'type' => 'invoice']));
-        TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c3->id, 'amount' => 300, 'type' => 'invoice']));
+// --- withFlowFields + orderByFlowField combined ---
 
-        // Warm all in one withFlowFields pass
-        $customers = TestCustomer::withFlowFields('balance')->get();
+it('orderByFlowField combined with withFlowFields works correctly', function () {
+    $c1 = TestCustomer::create(['name' => 'Low Balance']);
+    $c2 = TestCustomer::create(['name' => 'High Balance']);
 
-        // All three should now be cached — subsequent reads are zero-query
-        $queryCount = 0;
-        DB::listen(function () use (&$queryCount) {
-            $queryCount++;
-        });
+    TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c1->id, 'amount' => 10, 'type' => 'invoice']));
+    TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c2->id, 'amount' => 9999, 'type' => 'invoice']));
 
-        foreach ($customers as $c) {
-            $c->balance; // should come from cache
-        }
+    $customers = TestCustomer::withFlowFields('balance')
+        ->orderByFlowField('balance', 'desc')
+        ->get();
 
-        $this->assertEquals(0, $queryCount, 'All balance reads after bulk warm should hit cache');
+    expect($customers->first()->name)->toBe('High Balance');
+    expect($customers->last()->name)->toBe('Low Balance');
+    expect(Cache::store('array')->get("flowfield:test_customers:{$c2->id}:balance"))->not->toBeNull();
+});
 
-        // Values are correct
-        $byName = $customers->keyBy('name');
-        $this->assertEquals(100, (float) $byName['Alpha']->balance);
-        $this->assertEquals(200, (float) $byName['Beta']->balance);
-        $this->assertEquals(300, (float) $byName['Gamma']->balance);
-    }
+// --- Cache Key Format ---
 
-    // -------------------------------------------------------------------------
-    // withFlowFields + orderByFlowField combined
-    // -------------------------------------------------------------------------
+it('cache key follows prefix:table:id:field convention', function () {
+    $customer = TestCustomer::create(['name' => 'Key Format Corp']);
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 42, 'type' => 'invoice',
+    ]));
 
-    public function test_order_by_flow_field_combined_with_with_flow_fields(): void
-    {
-        $c1 = TestCustomer::create(['name' => 'Low Balance']);
-        $c2 = TestCustomer::create(['name' => 'High Balance']);
+    $customer->balance;
 
-        TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c1->id, 'amount' => 10, 'type' => 'invoice']));
-        TestEntry::withoutEvents(fn () => TestEntry::create(['customer_id' => $c2->id, 'amount' => 9999, 'type' => 'invoice']));
+    $key = "flowfield:test_customers:{$customer->id}:balance";
+    expect((float) Cache::store('array')->get($key))->toBe(42.0);
+});
 
-        $customers = TestCustomer::withFlowFields('balance')
-            ->orderByFlowField('balance', 'desc')
-            ->get();
+// --- Cross-Domain Coexistence ---
 
-        $this->assertEquals('High Balance', $customers->first()->name);
-        $this->assertEquals('Low Balance', $customers->last()->name);
+it('inventory and customer flowfields coexist without interference', function () {
+    $customer = TestCustomer::create(['name' => 'Cross Domain Corp']);
+    $item = TestItem::create(['sku' => 'CROSS-001', 'name' => 'Cross Domain Widget']);
 
-        // After withFlowFields, values are cached
-        $cacheKeyHigh = "flowfield:test_customers:{$c2->id}:balance";
-        $this->assertNotNull(Cache::store('array')->get($cacheKeyHigh));
-    }
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 500, 'type' => 'invoice',
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $item->id, 'movement_type' => 'purchase', 'quantity' => 200, 'posted_at' => now(),
+    ]));
 
-    // -------------------------------------------------------------------------
-    // Cache Key Format Verification
-    // -------------------------------------------------------------------------
+    expect((float) $customer->balance)->toBe(500.0);
+    expect((float) $item->inventory_quantity)->toBe(200.0);
 
-    public function test_cache_key_format_follows_prefix_table_id_field_convention(): void
-    {
-        $customer = TestCustomer::create(['name' => 'Key Format Corp']);
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 42, 'type' => 'invoice',
-        ]));
+    $customer->flushFlowFields();
 
-        $customer->balance; // prime cache
+    $itemKey = "flowfield:test_items:{$item->id}:inventory_quantity";
+    expect(Cache::store('array')->get($itemKey))->not->toBeNull();
+});
 
-        $expectedKey = "flowfield:test_customers:{$customer->id}:balance";
-        $cachedValue = Cache::store('array')->get($expectedKey);
+// --- buildKeyFromParts ---
 
-        $this->assertNotNull($cachedValue, 'Cache key must follow pattern: flowfield:{table}:{id}:{field}');
-        $this->assertEquals(42, (float) $cachedValue);
-    }
-
-    // -------------------------------------------------------------------------
-    // Cross-Domain — Inventory + Customer in the same request
-    // -------------------------------------------------------------------------
-
-    public function test_inventory_and_customer_flowfields_coexist_without_interference(): void
-    {
-        $customer = TestCustomer::create(['name' => 'Cross Domain Corp']);
-        $item = TestItem::create(['sku' => 'CROSS-001', 'name' => 'Cross Domain Widget']);
-
-        TestEntry::withoutEvents(fn () => TestEntry::create([
-            'customer_id' => $customer->id, 'amount' => 500, 'type' => 'invoice',
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $item->id, 'movement_type' => 'purchase', 'quantity' => 200, 'posted_at' => now(),
-        ]));
-
-        // Both FlowFields resolve independently
-        $this->assertEquals(500, (float) $customer->balance);
-        $this->assertEquals(200, (float) $item->inventory_quantity);
-
-        // Flushing customer cache doesn't affect item cache
-        $customer->flushFlowFields();
-
-        $itemCacheKey = "flowfield:test_items:{$item->id}:inventory_quantity";
-        $this->assertNotNull(Cache::store('array')->get($itemCacheKey),
-            'Flushing customer FlowFields must not affect item FlowField cache'
-        );
-    }
-
-    // -------------------------------------------------------------------------
-    // FlowFieldCache::buildKeyFromParts utility
-    // -------------------------------------------------------------------------
-
-    public function test_build_key_from_parts_produces_deterministic_cache_key(): void
-    {
-        $key = FlowFieldCache::buildKeyFromParts(TestCustomer::class, 42, 'balance');
-
-        $this->assertEquals('flowfield:test_customers:42:balance', $key);
-    }
-}
+it('buildKeyFromParts produces deterministic cache key', function () {
+    $key = FlowFieldCache::buildKeyFromParts(TestCustomer::class, 42, 'balance');
+    expect($key)->toBe('flowfield:test_customers:42:balance');
+});

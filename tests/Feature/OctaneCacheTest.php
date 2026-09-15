@@ -1,0 +1,190 @@
+<?php
+
+declare(strict_types=1);
+
+use Illuminate\Support\Facades\Cache;
+use Schtzie\FlowField\Support\FlowFieldCache;
+use Schtzie\FlowField\Support\FlowFieldQueryTracker;
+use Schtzie\FlowField\Tests\Fixtures\TestCustomer;
+use Schtzie\FlowField\Tests\Fixtures\TestEntry;
+
+beforeEach(function () {
+    FlowFieldCache::resetStaticState();
+    FlowFieldQueryTracker::reset();
+});
+
+// ---------------------------------------------------------------------------
+// Octane static state reset
+// ---------------------------------------------------------------------------
+
+it('resetStaticState allows fresh tag detection on next access', function () {
+    $customer = TestCustomer::create(['name' => 'Test']);
+
+    // Create entry first, then access balance so 100 is cached
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 100, 'type' => 'invoice',
+    ]));
+
+    $firstAccess = (float) $customer->balance;
+    expect($firstAccess)->toBe(100.0);
+
+    // After reset, the L2 cache still holds the value
+    FlowFieldCache::resetStaticState();
+
+    // Re-access should still work (served from L2)
+    $freshCustomer = TestCustomer::find($customer->id);
+    expect((float) $freshCustomer->balance)->toBe(100.0);
+});
+
+it('resetStaticState clears the Octane L1 cache', function () {
+    config(['flowfield.cache.octane_l1' => true]);
+
+    $customer = TestCustomer::create(['name' => 'L1 Test']);
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 250, 'type' => 'invoice',
+    ]));
+
+    $customer->balance; // Primes L1 + L2
+
+    // Verify L2 cache is populated
+    $key = FlowFieldCache::buildKey($customer, 'balance');
+    expect(Cache::store('array')->get($key))->not->toBeNull();
+
+    FlowFieldCache::resetStaticState(); // Clears L1 but not L2
+    config(['flowfield.cache.octane_l1' => false]);
+
+    // L2 still has value
+    expect((float) Cache::store('array')->get($key))->toBe(250.0);
+});
+
+// ---------------------------------------------------------------------------
+// Octane L1 two-tier caching
+// ---------------------------------------------------------------------------
+
+it('L1 cache serves value without hitting L2 store', function () {
+    config(['flowfield.cache.octane_l1' => true]);
+
+    $customer = TestCustomer::create(['name' => 'L1 Corp']);
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 500, 'type' => 'invoice',
+    ]));
+
+    $customer->balance; // Prime L1 + L2
+
+    // Now delete from L2 — L1 should still serve it
+    Cache::store('array')->forget(FlowFieldCache::buildKey($customer, 'balance'));
+
+    expect((float) $customer->balance)->toBe(500.0);
+
+    config(['flowfield.cache.octane_l1' => false]);
+});
+
+it('L1 is populated when put() is called', function () {
+    config(['flowfield.cache.octane_l1' => true]);
+
+    $customer = TestCustomer::create(['name' => 'L1 Put Corp']);
+    FlowFieldCache::put($customer, 'balance', 999.0);
+
+    expect((float) $customer->balance)->toBe(999.0);
+
+    config(['flowfield.cache.octane_l1' => false]);
+});
+
+it('L1 is invalidated when FlowFieldCache::invalidate is called', function () {
+    config(['flowfield.cache.octane_l1' => true]);
+
+    $customer = TestCustomer::create(['name' => 'L1 Invalidate Corp']);
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 100, 'type' => 'invoice',
+    ]));
+
+    $customer->balance; // Prime L1 + L2
+
+    FlowFieldCache::invalidate(TestCustomer::class, $customer->id, 'balance');
+
+    // After invalidation, next access recalculates from DB
+    $defs = $customer->getFlowFieldDefinitions();
+    $value = FlowFieldCache::remember($customer, 'balance', $defs['balance']);
+
+    expect((float) $value)->toBe(100.0);
+
+    config(['flowfield.cache.octane_l1' => false]);
+});
+
+// ---------------------------------------------------------------------------
+// Query deduplication tracker
+// ---------------------------------------------------------------------------
+
+it('FlowFieldQueryTracker has/set/get round-trip works', function () {
+    FlowFieldQueryTracker::reset();
+
+    expect(FlowFieldQueryTracker::has('flowfield:test:1:balance'))->toBeFalse();
+
+    config(['flowfield.query_deduplication.enabled' => true]);
+    FlowFieldQueryTracker::set('flowfield:test:1:balance', 123.45);
+
+    expect(FlowFieldQueryTracker::has('flowfield:test:1:balance'))->toBeTrue();
+    expect(FlowFieldQueryTracker::get('flowfield:test:1:balance'))->toBe(123.45);
+
+    config(['flowfield.query_deduplication.enabled' => false]);
+});
+
+it('FlowFieldQueryTracker does not store when deduplication disabled', function () {
+    config(['flowfield.query_deduplication.enabled' => false]);
+    FlowFieldQueryTracker::reset();
+
+    FlowFieldQueryTracker::set('flowfield:test:1:balance', 42);
+
+    expect(FlowFieldQueryTracker::has('flowfield:test:1:balance'))->toBeFalse();
+});
+
+it('FlowFieldQueryTracker reset clears all entries', function () {
+    config(['flowfield.query_deduplication.enabled' => true]);
+    FlowFieldQueryTracker::set('a', 1);
+    FlowFieldQueryTracker::set('b', 2);
+
+    expect(FlowFieldQueryTracker::keys())->toHaveCount(2);
+
+    FlowFieldQueryTracker::reset();
+
+    expect(FlowFieldQueryTracker::keys())->toHaveCount(0);
+
+    config(['flowfield.query_deduplication.enabled' => false]);
+});
+
+// ---------------------------------------------------------------------------
+// Auto driver detection (ServiceProvider logic)
+// ---------------------------------------------------------------------------
+
+it('resetTagsCache forces re-detection of tag support', function () {
+    FlowFieldCache::resetTagsCache();
+
+    $customer = TestCustomer::create(['name' => 'Tags Test Corp']);
+    TestEntry::withoutEvents(fn () => TestEntry::create([
+        'customer_id' => $customer->id, 'amount' => 50, 'type' => 'invoice',
+    ]));
+
+    // Simply verify no exception on access after tags cache reset
+    expect((float) $customer->balance)->toBe(50.0);
+});
+
+it('filter-aware cache key includes filter suffix', function () {
+    $customer = TestCustomer::create(['name' => 'Filter Key Corp']);
+
+    $plainKey = FlowFieldCache::buildKey($customer, 'balance');
+    $filteredKey = FlowFieldCache::buildFilterAwareKey($customer, 'balance', [
+        'posting_date' => ['2026-01-01', '2026-12-31'],
+    ]);
+
+    expect($filteredKey)->not->toBe($plainKey);
+    expect($filteredKey)->toContain('posting_date=2026-01-01..2026-12-31');
+});
+
+it('filter-aware cache key is stable across calls', function () {
+    $customer = TestCustomer::create(['name' => 'Stable Key Corp']);
+
+    $key1 = FlowFieldCache::buildFilterAwareKey($customer, 'balance', ['dept' => 'IT']);
+    $key2 = FlowFieldCache::buildFilterAwareKey($customer, 'balance', ['dept' => 'IT']);
+
+    expect($key1)->toBe($key2);
+});

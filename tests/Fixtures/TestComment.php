@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace Schtzie\FlowField\Tests\Fixtures;
 
 use Illuminate\Database\Eloquent\Model;

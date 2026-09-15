@@ -1,310 +1,231 @@
 <?php
 
-namespace Schtzie\FlowField\Tests\Feature;
+declare(strict_types=1);
 
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Schtzie\FlowField\Tests\Fixtures\TestItem;
 use Schtzie\FlowField\Tests\Fixtures\TestStockMovement;
-use Schtzie\FlowField\Tests\TestCase;
 
-/**
- * Inventory FlowField Tests — Navision Item Ledger Entry analog
- *
- * In Business Central, every quantity on the Item card (Inventory, Purchases Qty.,
- * Sales Qty., etc.) is a SIFT-backed Sum FlowField. SIFT maintains pre-calculated
- * indexes on every write so reads are instant even with millions of ledger entries.
- *
- * Here we verify that our cache-backed implementation provides the same guarantees:
- * correct sums, correct isolation per SKU, automatic invalidation on every write,
- * and zero-query reads on cache hits.
- */
-class InventoryFlowFieldTest extends TestCase
-{
-    protected TestItem $widget;
+beforeEach(function () {
+    $this->widget = TestItem::create(['sku' => 'WIDGET-001', 'name' => 'Blue Widget']);
+});
 
-    protected function setUp(): void
-    {
-        parent::setUp();
+// --- Sum FlowFields (SIFT analog) ---
 
-        $this->widget = TestItem::create(['sku' => 'WIDGET-001', 'name' => 'Blue Widget']);
-    }
+it('inventory_quantity reflects initial stock receipt', function () {
+    TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase',
+        'quantity' => 100, 'posted_at' => now(),
+    ]);
 
-    // -------------------------------------------------------------------------
-    // Sum FlowFields — SIFT analog
-    // -------------------------------------------------------------------------
+    expect((float) $this->widget->inventory_quantity)->toBe(100.0);
+});
 
-    public function test_inventory_quantity_reflects_initial_stock_receipt(): void
-    {
-        // Receive 100 units via purchase
-        TestStockMovement::create([
-            'item_id' => $this->widget->id,
-            'movement_type' => 'purchase',
-            'quantity' => 100,
-            'posted_at' => now(),
-        ]);
+it('selling stock decrements inventory and updates sold_quantity', function () {
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase',
+        'quantity' => 50, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'sale',
+        'quantity' => -20, 'posted_at' => now(),
+    ]));
 
-        $this->assertEquals(100, (float) $this->widget->inventory_quantity);
-    }
+    expect((float) $this->widget->inventory_quantity)->toBe(30.0);
+    expect((float) $this->widget->sold_quantity)->toBe(-20.0);
+    expect((float) $this->widget->purchased_quantity)->toBe(50.0);
+});
 
-    public function test_selling_stock_decrements_inventory_and_sold_quantity(): void
-    {
-        // Purchase 50 units
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 50, 'posted_at' => now(),
-        ]));
+it('adjustment_quantity is isolated from other movement types', function () {
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase',
+        'quantity' => 100, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'adjustment',
+        'quantity' => -5, 'posted_at' => now(),
+    ]));
 
-        // Sell 20 units (stored as negative quantity in the ledger)
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'sale', 'quantity' => -20, 'posted_at' => now(),
-        ]));
+    expect((float) $this->widget->adjustment_quantity)->toBe(-5.0);
+    expect((float) $this->widget->purchased_quantity)->toBe(100.0);
+    expect((float) $this->widget->inventory_quantity)->toBe(95.0);
+});
 
-        // inventory_quantity = 50 + (-20) = 30
-        $this->assertEquals(30, (float) $this->widget->inventory_quantity);
-        // sold_quantity reflects only sale movements
-        $this->assertEquals(-20, (float) $this->widget->sold_quantity);
-        // purchased_quantity reflects only purchase movements
-        $this->assertEquals(50, (float) $this->widget->purchased_quantity);
-    }
+it('inventory can go negative in backorder scenario', function () {
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'sale',
+        'quantity' => -30, 'posted_at' => now(),
+    ]));
 
-    public function test_adjustment_quantity_is_isolated_from_other_movement_types(): void
-    {
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 100, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'adjustment', 'quantity' => -5, 'posted_at' => now(),
-        ]));
+    expect((float) $this->widget->inventory_quantity)->toBe(-30.0);
+});
 
-        // adjustment_quantity only sums adjustment rows
-        $this->assertEquals(-5, (float) $this->widget->adjustment_quantity);
-        // purchased_quantity unaffected by the adjustment
-        $this->assertEquals(100, (float) $this->widget->purchased_quantity);
-        // overall inventory reflects both
-        $this->assertEquals(95, (float) $this->widget->inventory_quantity);
-    }
+it('inventory is zero when purchases equal sales', function () {
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase',
+        'quantity' => 50, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'sale',
+        'quantity' => -50, 'posted_at' => now(),
+    ]));
 
-    public function test_inventory_can_go_negative_backorder_scenario(): void
-    {
-        // Ship 30 units before the purchase receipt arrives (backorder / negative inventory)
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'sale', 'quantity' => -30, 'posted_at' => now(),
-        ]));
+    expect((float) $this->widget->inventory_quantity)->toBe(0.0);
+});
 
-        $this->assertEquals(-30, (float) $this->widget->inventory_quantity);
-    }
+// --- Count FlowField ---
 
-    public function test_zero_balance_when_purchases_equal_sales(): void
-    {
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 50, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'sale', 'quantity' => -50, 'posted_at' => now(),
-        ]));
+it('movement_count tracks all movement types', function () {
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 10, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'sale', 'quantity' => -3, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'adjustment', 'quantity' => 1, 'posted_at' => now(),
+    ]));
 
-        // Exactly zero — not null
-        $this->assertEquals(0, (float) $this->widget->inventory_quantity);
-    }
+    expect($this->widget->movement_count)->toBe(3);
+});
 
-    // -------------------------------------------------------------------------
-    // Count FlowField
-    // -------------------------------------------------------------------------
+// --- Max FlowField (Last Transaction Date) ---
 
-    public function test_movement_count_tracks_all_movement_types(): void
-    {
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 10, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'sale', 'quantity' => -3, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'adjustment', 'quantity' => 1, 'posted_at' => now(),
-        ]));
+it('last_transaction_date returns most recent posting', function () {
+    $older = now()->subDays(5)->toDateTimeString();
+    $newer = now()->toDateTimeString();
 
-        $this->assertEquals(3, $this->widget->movement_count);
-    }
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 10, 'posted_at' => $older,
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 5, 'posted_at' => $newer,
+    ]));
 
-    // -------------------------------------------------------------------------
-    // Max FlowField — "Last Transaction Date"
-    // -------------------------------------------------------------------------
+    expect($this->widget->last_transaction_date)->toBe($newer);
+});
 
-    public function test_last_transaction_date_returns_most_recent_posting(): void
-    {
-        $older = now()->subDays(5)->toDateTimeString();
-        $newer = now()->toDateTimeString();
+// --- Exists FlowField ---
 
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 10, 'posted_at' => $older,
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 5, 'posted_at' => $newer,
-        ]));
+it('has_stock_movements is false for new item', function () {
+    expect($this->widget->has_stock_movements)->toBeFalse();
+});
 
-        $this->assertEquals($newer, $this->widget->last_transaction_date);
-    }
+it('has_stock_movements is true after first receipt', function () {
+    TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase',
+        'quantity' => 1, 'posted_at' => now(),
+    ]);
 
-    // -------------------------------------------------------------------------
-    // Exists FlowField
-    // -------------------------------------------------------------------------
+    expect(TestItem::find($this->widget->id)->has_stock_movements)->toBeTrue();
+});
 
-    public function test_has_stock_movements_is_false_for_new_item(): void
-    {
-        $this->assertFalse($this->widget->has_stock_movements);
-    }
+// --- Cache behaviour ---
 
-    public function test_has_stock_movements_is_true_after_first_receipt(): void
-    {
-        TestStockMovement::create([
-            'item_id' => $this->widget->id,
-            'movement_type' => 'purchase',
-            'quantity' => 1,
-            'posted_at' => now(),
-        ]);
+it('second inventory read hits cache with zero queries', function () {
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 75, 'posted_at' => now(),
+    ]));
+    $this->widget->inventory_quantity; // prime cache
 
-        $freshItem = TestItem::find($this->widget->id);
-        $this->assertTrue($freshItem->has_stock_movements);
-    }
+    $queryCount = 0;
+    DB::listen(fn () => $queryCount++);
 
-    // -------------------------------------------------------------------------
-    // Cache behaviour
-    // -------------------------------------------------------------------------
+    expect((float) $this->widget->inventory_quantity)->toBe(75.0);
+    expect($queryCount)->toBe(0);
+});
 
-    public function test_second_inventory_read_hits_cache_with_zero_queries(): void
-    {
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 75, 'posted_at' => now(),
-        ]));
+it('creating a movement invalidates inventory cache', function () {
+    $this->widget->inventory_quantity;
+    $key = "flowfield:test_items:{$this->widget->id}:inventory_quantity";
+    expect(Cache::store('array')->get($key))->not->toBeNull();
 
-        // Prime cache
-        $this->widget->inventory_quantity;
+    TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 50, 'posted_at' => now(),
+    ]);
 
-        $queryCount = 0;
-        DB::listen(function () use (&$queryCount) {
-            $queryCount++;
-        });
+    expect(Cache::store('array')->get($key))->toBeNull();
+});
 
-        $result = $this->widget->inventory_quantity;
+it('updating quantity invalidates inventory cache', function () {
+    $movement = TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 50, 'posted_at' => now(),
+    ]));
 
-        $this->assertEquals(75, (float) $result);
-        $this->assertEquals(0, $queryCount, 'Second read should be served from cache with zero DB queries');
-    }
+    $this->widget->calcFlowFields('inventory_quantity');
+    $key = "flowfield:test_items:{$this->widget->id}:inventory_quantity";
+    expect(Cache::store('array')->get($key))->not->toBeNull();
 
-    public function test_creating_a_movement_invalidates_inventory_cache(): void
-    {
-        // Prime inventory cache at 0
-        $this->widget->inventory_quantity;
-        $cacheKey = "flowfield:test_items:{$this->widget->id}:inventory_quantity";
-        $this->assertNotNull(Cache::store('array')->get($cacheKey));
+    $movement->update(['quantity' => 80]);
 
-        // Triggering event invalidates cache
-        TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 50, 'posted_at' => now(),
-        ]);
+    expect(Cache::store('array')->get($key))->toBeNull();
+    expect((float) $this->widget->inventory_quantity)->toBe(80.0);
+});
 
-        $this->assertNull(Cache::store('array')->get($cacheKey));
-    }
+it('soft deleting a movement invalidates cache', function () {
+    $movement = TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 60, 'posted_at' => now(),
+    ]));
 
-    public function test_updating_quantity_invalidates_inventory_cache(): void
-    {
-        $movement = TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 50, 'posted_at' => now(),
-        ]));
+    $this->widget->calcFlowFields('inventory_quantity');
+    $key = "flowfield:test_items:{$this->widget->id}:inventory_quantity";
+    expect((float) Cache::store('array')->get($key))->toBe(60.0);
 
-        $this->widget->calcFlowFields('inventory_quantity');
-        $cacheKey = "flowfield:test_items:{$this->widget->id}:inventory_quantity";
-        $this->assertNotNull(Cache::store('array')->get($cacheKey));
+    $movement->delete();
 
-        $movement->update(['quantity' => 80]);
+    expect(Cache::store('array')->get($key))->toBeNull();
+    expect((float) $this->widget->inventory_quantity)->toBe(0.0);
+});
 
-        $this->assertNull(Cache::store('array')->get($cacheKey));
-        // Fresh read reflects the updated quantity
-        $this->assertEquals(80, (float) $this->widget->inventory_quantity);
-    }
+// --- Multi-SKU isolation ---
 
-    public function test_soft_deleting_a_movement_reversal_invalidates_cache(): void
-    {
-        $movement = TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 60, 'posted_at' => now(),
-        ]));
+it('flowfields are isolated per SKU', function () {
+    $gadget = TestItem::create(['sku' => 'GADGET-002', 'name' => 'Red Gadget']);
 
-        // Cache with both movements present
-        $this->widget->calcFlowFields('inventory_quantity');
-        $cacheKey = "flowfield:test_items:{$this->widget->id}:inventory_quantity";
-        $this->assertEquals(60, (float) Cache::store('array')->get($cacheKey));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 100, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $gadget->id, 'movement_type' => 'purchase', 'quantity' => 25, 'posted_at' => now(),
+    ]));
 
-        // Reverse / soft-delete the movement
-        $movement->delete();
+    expect((float) $this->widget->inventory_quantity)->toBe(100.0);
+    expect((float) $gadget->inventory_quantity)->toBe(25.0);
+});
 
-        // Cache must be invalidated
-        $this->assertNull(Cache::store('array')->get($cacheKey));
-        // Fresh read reflects only remaining movements (none here → 0)
-        $this->assertEquals(0, (float) $this->widget->inventory_quantity);
-    }
+// --- Bulk warm via withFlowFields scope ---
 
-    // -------------------------------------------------------------------------
-    // Multi-SKU isolation — FlowFields must not leak between Items
-    // -------------------------------------------------------------------------
+it('withFlowFields scope pre-warms cache for all items', function () {
+    $gadget = TestItem::create(['sku' => 'GADGET-002', 'name' => 'Red Gadget']);
 
-    public function test_flowfields_are_isolated_per_sku(): void
-    {
-        $gadget = TestItem::create(['sku' => 'GADGET-002', 'name' => 'Red Gadget']);
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 40, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $gadget->id, 'movement_type' => 'purchase', 'quantity' => 15, 'posted_at' => now(),
+    ]));
 
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 100, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $gadget->id, 'movement_type' => 'purchase', 'quantity' => 25, 'posted_at' => now(),
-        ]));
+    TestItem::withFlowFields('inventory_quantity')->get();
 
-        $this->assertEquals(100, (float) $this->widget->inventory_quantity);
-        $this->assertEquals(25, (float) $gadget->inventory_quantity);
-    }
+    expect((float) Cache::store('array')->get("flowfield:test_items:{$this->widget->id}:inventory_quantity"))->toBe(40.0);
+    expect((float) Cache::store('array')->get("flowfield:test_items:{$gadget->id}:inventory_quantity"))->toBe(15.0);
+});
 
-    // -------------------------------------------------------------------------
-    // Bulk warm via withFlowFields scope
-    // -------------------------------------------------------------------------
+// --- orderByFlowField ---
 
-    public function test_with_flow_fields_scope_pre_warms_cache_for_all_items(): void
-    {
-        $gadget = TestItem::create(['sku' => 'GADGET-002', 'name' => 'Red Gadget']);
+it('orderByFlowField sorts items by inventory descending', function () {
+    $gadget = TestItem::create(['sku' => 'GADGET-002', 'name' => 'Red Gadget']);
 
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 40, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $gadget->id, 'movement_type' => 'purchase', 'quantity' => 15, 'posted_at' => now(),
-        ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 10, 'posted_at' => now(),
+    ]));
+    TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
+        'item_id' => $gadget->id, 'movement_type' => 'purchase', 'quantity' => 999, 'posted_at' => now(),
+    ]));
 
-        // Bulk warm via scope (SIFT equivalent: pre-calculate all at once)
-        TestItem::withFlowFields('inventory_quantity')->get();
+    $ordered = TestItem::orderByFlowField('inventory_quantity', 'desc')->pluck('sku')->toArray();
 
-        $widgetKey = "flowfield:test_items:{$this->widget->id}:inventory_quantity";
-        $gadgetKey = "flowfield:test_items:{$gadget->id}:inventory_quantity";
-
-        $this->assertEquals(40, (float) Cache::store('array')->get($widgetKey));
-        $this->assertEquals(15, (float) Cache::store('array')->get($gadgetKey));
-    }
-
-    // -------------------------------------------------------------------------
-    // orderByFlowField — sort items by stock level
-    // -------------------------------------------------------------------------
-
-    public function test_order_by_flow_field_sorts_items_by_inventory_descending(): void
-    {
-        $gadget = TestItem::create(['sku' => 'GADGET-002', 'name' => 'Red Gadget']);
-
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $this->widget->id, 'movement_type' => 'purchase', 'quantity' => 10, 'posted_at' => now(),
-        ]));
-        TestStockMovement::withoutEvents(fn () => TestStockMovement::create([
-            'item_id' => $gadget->id, 'movement_type' => 'purchase', 'quantity' => 999, 'posted_at' => now(),
-        ]));
-
-        $ordered = TestItem::orderByFlowField('inventory_quantity', 'desc')->pluck('sku')->toArray();
-
-        $this->assertEquals('GADGET-002', $ordered[0]);
-        $this->assertEquals('WIDGET-001', $ordered[1]);
-    }
-}
+    expect($ordered[0])->toBe('GADGET-002');
+    expect($ordered[1])->toBe('WIDGET-001');
+});

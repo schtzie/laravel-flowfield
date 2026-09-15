@@ -8,3 +8,9 @@ composer.lock
 .vscode/
 *.swp
 *.swo
+
+# Test coverage HTML report
+/.coverage/
+
+# PHPStan result cache
+/.phpstan/
